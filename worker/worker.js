@@ -2,7 +2,8 @@
 // A chave fica só no segredo RIOT_API_KEY do Cloudflare: nunca no app, no site ou no repositório.
 // Só expõe dados públicos de cartas; guarda em cache para chamar a Riot raramente.
 
-const RIOT = "https://americas.api.riotgames.com/riftbound/content/v1/contents";
+const REGIONS = ["americas", "europe", "asia"];
+const riotUrl = (r, locale) => `https://${r}.api.riotgames.com/riftbound/content/v1/contents?locale=${locale}`;
 const TTL = 6 * 60 * 60; // 6 h
 const ALLOWED = [
   "https://marcusazevd.github.io",
@@ -49,9 +50,15 @@ export default {
       return r;
     }
 
-    const up = await fetch(`${RIOT}?locale=${locale}`, { headers: { "X-Riot-Token": env.RIOT_API_KEY } });
-    const text = await up.text();
-    if (!up.ok) return json({ error: "riot", status: up.status }, up.status === 429 ? 429 : 502, origin);
+    const key = String(env.RIOT_API_KEY).trim();
+    let up, text, tried = [];
+    for (const r of REGIONS) {
+      up = await fetch(riotUrl(r, locale), { headers: { "X-Riot-Token": key } });
+      text = await up.text();
+      tried.push({ region: r, status: up.status, message: up.ok ? "ok" : text.slice(0, 200) });
+      if (up.ok || up.status === 429) break;
+    }
+    if (!up.ok) return json({ error: "riot", status: up.status, keyShape: /^RGAPI-[0-9a-f-]{36}$/.test(key) ? "ok" : "unexpected", tried }, up.status === 429 ? 429 : 502, origin);
 
     const res = json(text, 200, origin, { "Cache-Control": `public, max-age=${TTL}`, "X-Riftsight-Cache": "miss" });
     ctx.waitUntil(cache.put(cacheKey, new Response(text, { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": `public, max-age=${TTL}` } })));
