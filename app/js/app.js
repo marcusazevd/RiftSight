@@ -18,7 +18,7 @@ const IC = {
 
 function renderHeader() {
   const r = record(S.getState().matches);
-  $("#rec").innerHTML = r.n ? `<b>${r.w}–${r.l}${r.d ? "–" + r.d : ""}</b>${r.n} partida${r.n > 1 ? "s" : ""}` : `<b>—</b>sem partidas`;
+  $("#rec").innerHTML = r.n ? `<b>${r.w}–${r.l}${r.d ? "–" + r.d : ""}</b>${r.n} partida${r.n > 1 ? "s" : ""}` : `sem partidas`;
 }
 
 // Tela de entrada: some sozinha (~1,6 s) ou com um toque.
@@ -35,7 +35,7 @@ function boot() {
   splash();
   applyTheme();
   document.body.insertAdjacentHTML("afterbegin", `<main>
-    <header class="top"><div class="brand"><span class="mark">${RUNE}</span><div><h1>Rift</h1><small>Companion</small></div></div><div class="rec" id="rec"></div></header>
+    <header class="top"><div class="brand"><span class="mark">${RUNE}</span><div><h1>Riftsight</h1><small>Conquer · Hold · Understand</small></div></div><div class="rec" id="rec"></div></header>
     <section id="add"></section><section id="live" class="hide"></section><section id="stats" class="hide"></section><section id="hist" class="hide"></section><section id="more" class="hide"></section>
   </main>
   <footer class="fan">App de fã, não oficial. Sem vínculo com a Riot Games.</footer>

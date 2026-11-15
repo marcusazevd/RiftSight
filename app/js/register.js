@@ -315,6 +315,14 @@ async function save() {
   collect();
   const bo3 = F.fmt === "bo3";
   let games, result, score = "";
+  {
+    const miss = [];
+    if (!F.my) miss.push("teu deck ou tua lenda");
+    if (!F.opp) miss.push("a lenda do oponente");
+    if (!bo3 && !F.result) miss.push("o resultado: vitória, derrota ou empate");
+    if (bo3 && !F.timeResult) { const r0 = resultFromGames(F.games.filter((g) => g.result)); if (!(r0.w === 2 || r0.l === 2 || (F.timeDraw && r0.w === 1 && r0.l === 1))) miss.push("quem ganhou cada game, até alguém fazer 2 (ou empate por tempo no 1–1)"); }
+    if (miss.length) { await dialog({ title: "Falta pouco", body: "<p>Para salvar, falta marcar:</p><ul class=\"miss\">" + miss.map((x) => "<li>" + x + "</li>").join("") + "</ul>" }); return; }
+  }
   if (bo3) {
     const used = F.games.filter((g) => g.result);
     const r = resultFromGames(used);

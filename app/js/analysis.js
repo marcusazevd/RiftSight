@@ -254,7 +254,7 @@ function torneio(all) {
 
 function render() {
   const el = $("#stats"), all = S.getState().matches;
-  if (!all.length) { el.innerHTML = tabsBar() + `<div class="card m">Nenhuma partida ainda. Registre uma para ver as estatísticas.</div>`; return; }
+  if (!all.length) { el.innerHTML = tabsBar() + `<div class="card m">Nenhuma partida ainda. Registre uma para ver as estatísticas.<button class="btn pri" id="st-go-add" type="button" style="display:block;margin-top:12px">Registrar partida</button></div>`; el.querySelector("#st-go-add").addEventListener("click", () => document.querySelector("nav button[data-t=add]").click()); return; }
   let h = tabsBar();
   if (tab === "geral" || (tab === "matchups" && !muOpp)) h += filtersBar(all);
   const d = applyFilters(all, tab === "matchups" ? { ...FL, opp: "", ver: "" } : FL);

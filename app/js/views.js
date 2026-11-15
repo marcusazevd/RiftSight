@@ -50,12 +50,13 @@ function renderHist() {
     ${S.openEvent() ? "" : '<button class="btn pri" id="ev-new" type="button" style="margin-top:12px">Começar evento</button>'}</div>`;
     return;
   }
-  el.innerHTML = tabs + (ms.length ? `<div class="card"><h2>Histórico</h2>${ms.slice().reverse().map(matchRow).join("")}</div>` : `<div class="card"><h2>Histórico</h2><p class="m">Nenhuma partida registrada.</p></div>`);
+  el.innerHTML = tabs + (ms.length ? `<div class="card"><h2>Histórico</h2>${ms.slice().reverse().map(matchRow).join("")}</div>` : `<div class="card"><h2>Histórico</h2><p class="m">Nenhuma partida registrada.</p><button class="btn pri" id="hi-go-add" type="button" style="margin-top:4px">Registrar partida</button></div>`);
 }
 function bindHist() {
   $("#hist").addEventListener("click", async (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.ht) { histTab = b.dataset.ht; renderHist(); return; }
+    if (b.id === "hi-go-add") { document.querySelector("nav button[data-t=add]").click(); return; }
     if (b.dataset.ed) return editMatch(b.dataset.ed);
     if (b.dataset.del) {
       const m = S.getState().matches.find((x) => x.id === b.dataset.del); if (!m) return;
