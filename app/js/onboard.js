@@ -29,13 +29,13 @@ const STEPS = [
     art: `<div class="ob-counter"><div class="ob-row">${av("#e2483d", "#9b59d6", "JI", 30)}${seg(5)}<b>5</b></div><div class="ob-row">${av("#3b8fe0", "#36a86a", "AH", 30)}${seg(3, "var(--loss)")}<b>3</b></div><div class="ob-btns"><span class="c">CONQUER</span><span class="h">HOLD</span><span class="p">PASSAR</span></div></div>`,
     body: `<p>Toque em <b>NOVA PARTIDA</b>, escolha o oponente e quem começa.</p>
       <ul class="ob-feat"><li><b>Conquer</b> e <b>Hold</b> marcam o ponto e de onde ele veio</li><li><b>Passar turno</b> troca o relógio de cada jogador</li><li>No <b>8</b>, o game termina e a partida é salva com tudo</li><li>No Bo3, os games se encadeiam; se o app fechar, o placar volta</li></ul>
-      <p class="m">Jogou sem o contador? Registre na mão, logo abaixo do botão.</p>`,
+      <p class="m">Jogou sem o contador? Toque em <b>Registrar partida já jogada</b>, logo abaixo do botão.</p>`,
   },
   {
     k: "PASSO 3",
     t: "Em dia de evento",
     art: `<div class="ob-event"><div class="ob-ev-h">NEXUS NIGHT · 3–1</div>${[["R1", "V", "w"], ["R2", "V", "w"], ["R3", "D", "l"], ["R4", "V", "w"]].map(([r, x, c]) => `<div class="ob-ev-r"><span>${r}</span><i class="${c}">${x}</i></div>`).join("")}</div>`,
-    body: `<p>Antes da primeira rodada, toque em <b>Começar evento</b>. Cada partida registrada vira uma rodada automaticamente.</p>
+    body: `<p>Antes da primeira rodada, toque em <b>＋ EVENTO</b>, ao lado de NOVA PARTIDA. Cada partida registrada vira uma rodada automaticamente.</p>
       <p>No fim, <b>Encerrar</b> com a colocação. Dá para gerar um <b>card</b> com o resultado para mandar no grupo.</p>`,
   },
   {

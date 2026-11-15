@@ -1,4 +1,4 @@
-// Tela "Registrar": atalho para o contador, evento em andamento e registro manual rápido.
+// Tela "Registrar": resumo (recorde e últimas), atalho para o contador, evento e registro manual (recolhível).
 import { DOMAINS, LEGENDS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendInfo, legendColors, dialog, confirmBox, promptBox, toast, RUNE } from "./ui.js";
@@ -18,7 +18,7 @@ export function blankForm() {
     ctx: ev ? ev.type : prefs.ctx || "Nexus Night", eventId: ev ? ev.id : null, round: null,
     turn: "", note: "", fmt: prefs.fmt || "bo1", result: "", myBf: "", oppBf: "",
     games: [g0(), g0(), g0()], timeDraw: false,
-    date: toLocalInput(Date.now()), dateTouched: false, set: "", setTouched: false, details: false,
+    date: toLocalInput(Date.now()), dateTouched: false, set: "", setTouched: false, details: false, manual: !!prefs.manual,
   };
 }
 const g0 = () => ({ first: "", result: "", myBf: "", oppBf: "" });
@@ -172,19 +172,20 @@ export function nextRound(eventId) {
 }
 function eventBanner() {
   const ev = S.openEvent();
-  if (!ev) return `<div class="evbar idle"><span>Vai jogar um evento?</span><button class="btn" type="button" id="ev-start">Começar evento</button></div>`;
+  if (!ev) return "";
   const r = eventRecord(ev);
   return `<div class="evbar"><div><span class="tag">EVENTO EM ANDAMENTO</span><br><b>${esc(ev.name)}</b> <span class="m">· ${esc(ev.type)}</span><div class="m">Rodada ${nextRound(ev.id)} · ${r.w}-${r.l}${r.d ? "-" + r.d : ""}${ev.place ? " · " + esc(ev.place) : ""}</div></div><button class="btn" type="button" id="ev-close">Encerrar</button></div>`;
 }
 
-// últimas 5 partidas e sequência atual
-function lastRow() {
+// faixa de status: recorde, últimas 5 e sequência
+function statusStrip() {
   const ms = S.getState().matches; if (!ms.length) return "";
+  const w = ms.filter((m) => m.result === "W").length, l = ms.filter((m) => m.result === "L").length, d = ms.length - w - l;
   const last = ms.slice(-5);
   let n = 0; const r = ms[ms.length - 1].result; for (let i = ms.length - 1; i >= 0 && ms[i].result === r; i--) n++;
-  return `<div class="lastrow"><span class="lbl2">ÚLTIMAS</span>${last.map((m) => `<span class="chip ${m.result}" title="${RES[m.result]} vs ${esc(m.opp)}">${{ W: "V", L: "D", D: "E" }[m.result]}</span>`).join("")}${r === "W" && n > 1 ? `<span class="streak">SEQUÊNCIA x${n}</span>` : ""}</div>`;
+  return `<div class="sstrip"><div class="ss-rec"><b>${w}–${l}${d ? "–" + d : ""}</b><span>${Math.round((w / ms.length) * 100)}% · ${ms.length} partidas</span></div>
+    <div class="ss-last">${last.map((m) => `<span class="chip ${m.result}">${{ W: "V", L: "D", D: "E" }[m.result]}</span>`).join("")}${r === "W" && n > 1 ? `<span class="ss-streak">x${n}</span>` : ""}</div></div>`;
 }
-
 // ---------- render ----------
 function myBfOptions() { const dk = F.deckId ? S.deck(F.deckId) : null; const own = dk ? (dk.battlefields || []).filter(Boolean) : []; return own.length ? own : knownBattlefields(); }
 
@@ -219,16 +220,16 @@ function render() {
   const bfs = knownBattlefields();
   const mine = dk ? (dk.battlefields || []).filter(Boolean) : bfs;
   let liveOn = false; try { const lv = JSON.parse(localStorage.getItem("rbt_live") || "null"); liveOn = !!(lv && lv.phase && lv.phase !== "setup"); } catch (e) {}
-  el.innerHTML = `${F.editId ? "" : backupBanner()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}
-  ${F.editId ? "" : `<button class="go big-go" id="go-live" type="button"><span>NOVA PARTIDA<small>Contador de pontos${F.eventId && S.evt(F.eventId) ? " · rodada " + nextRound(F.eventId) : ""}</small></span></button><div class="orn m">OU REGISTRE MANUALMENTE</div>`}
-  <div class="card gold">
+  el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}
+  ${F.editId ? "" : `<div class="herorow"><button class="go big-go" id="go-live" type="button"><span>NOVA PARTIDA<small>Contador de pontos${F.eventId && S.evt(F.eventId) ? " · rodada " + nextRound(F.eventId) : ""}</small></span></button>${S.openEvent() ? "" : `<button class="evchip" type="button" id="ev-start"><b>＋</b>EVENTO</button>`}</div>
+  <button class="manual-t${F.manual ? " open" : ""}" id="f-manual" type="button" aria-expanded="${!!F.manual}"><span>Registrar partida já jogada</span><i>${F.manual ? "▴" : "▾"}</i></button>`}
+  <div class="card mcard${F.editId || F.manual ? "" : " hide"}">
     ${F.editId ? '<h2>Editar partida</h2>' : ""}
-    <div class="mu"><div class="pick" id="my" data-side="my">${pickerHTML("my", F.my, myLabel(dk), true, F.deckId)}</div><div class="vs">VS</div><div class="pick" id="opp" data-side="opp">${pickerHTML("opp", F.opp, "Oponente", false)}</div></div>
-    <label for="f-ver">Versão${dk ? " do " + esc(dk.name) : " do deck"}</label>
-    ${versionField("f-ver", F.deckId, F.versionId, F.ver, "f-vers")}
-    <div class="seg c2 fmt" role="group" aria-label="Formato"><button type="button" data-fmt="bo1" class="${!bo3 ? "on" : ""}">Partida única</button><button type="button" data-fmt="bo3" class="${bo3 ? "on" : ""}">Melhor de 3</button></div>
+    <div class="mu compact"><div class="pick" id="my" data-side="my">${pickerHTML("my", F.my, myLabel(dk), true, F.deckId)}</div><div class="vs">VS</div><div class="pick" id="opp" data-side="opp">${pickerHTML("opp", F.opp, "Oponente", false)}</div></div>
+    <div class="optrow"><span class="ol">Versão</span><div class="verchip">${versionField("f-ver", F.deckId, F.versionId, F.ver, "f-vers")}</div></div>
+    <div class="optrow"><span class="ol">Formato</span><div class="tg" role="group" aria-label="Formato"><button type="button" data-fmt="bo1" class="${!bo3 ? "on" : ""}">Única</button><button type="button" data-fmt="bo3" class="${bo3 ? "on" : ""}">Bo3</button></div>
+    </div>${bo3 ? "" : `<div class="optrow"><span class="ol">Começou</span><div class="tg" role="group" aria-label="Quem começou"><button type="button" data-t1="me" class="${F.turn === "me" ? "on" : ""}">Eu</button><button type="button" data-t1="opp" class="${F.turn === "opp" ? "on" : ""}">Oponente</button></div></div>`}
     ${bo3 ? `<div id="f-games">${gamesHTML()}</div>` : `
-      <div class="tg wide" role="group" aria-label="Quem começou"><span class="m">Quem começou?</span><button type="button" data-t1="me" class="${F.turn === "me" ? "on" : ""}">Eu</button><button type="button" data-t1="opp" class="${F.turn === "opp" ? "on" : ""}">Oponente</button></div>
       <div class="seg c3" id="f-res" role="group" aria-label="Resultado">${["W", "L", "D"].map((k) => `<button type="button" class="${k} ${F.result === k ? "on" : ""}" data-r="${k}">${RES[k]}</button>`).join("")}</div>
       ${F.details ? `<div class="bfrow"><label>Meu battlefield</label>${bfPicker("f-mybf", F.myBf, myBfOptions())}<label>Do oponente</label>${bfPicker("f-opbf", F.oppBf, knownBattlefields())}</div>` : ""}`}
     <button type="button" class="more-t" id="f-more" aria-expanded="${F.details}">${F.details ? "Menos detalhes ▴" : "Mais detalhes ▾"} <span class="m">${esc(ev ? ev.name + " · rodada " + (F.round || nextRound(ev.id)) : F.ctx)} · ${esc(S.sets().find((s) => s.id === F.set)?.name || "")} · ${fmtDate(fromLocalInput(F.date))}</span></button>
@@ -240,7 +241,7 @@ function render() {
     </div>
     <button class="go" id="f-save" type="button">${F.editId ? "ATUALIZAR PARTIDA" : "SALVAR"}</button>
     ${F.editId ? '<button class="btn full" id="f-cancel" type="button" style="margin-top:10px">Cancelar edição</button>' : ""}
-  </div>${F.editId ? "" : lastRow()}`;
+  </div>${F.editId ? "" : backupBanner()}`;
   paintMatchup($(".mu", el), F.my, F.opp);
   F._fresh = false;
 }
@@ -296,6 +297,7 @@ function bind() {
       $("#f-games").innerHTML = gamesHTML();
       return;
     }
+    if (b.id === "f-manual") { collect(); F.manual = !F.manual; prefs.manual = F.manual ? 1 : 0; savePrefs(); render(); return; }
     if (b.id === "f-more") { collect(); F.details = !F.details; render(); return; }
     if (b.id === "f-save") return save();
     if (b.id === "f-cancel") { F = blankForm(); render(); showView("hist"); }
@@ -366,7 +368,7 @@ async function save() {
   try { ok = await S.saveMatch(m); } finally { saving = false; }
   if (!ok) { await dialog({ title: "Não foi possível salvar", body: "<p>O aparelho está sem espaço. O formulário continua preenchido: faça um backup, remova fotos de lendas em Mais e tente de novo.</p>" }); return; }
   const wasEdit = !!old;
-  const keep = { details: F.details };
+  const keep = { details: F.details, manual: F.manual };
   F = { ...blankForm(), ...keep };
   render();
   toast(wasEdit ? "Partida atualizada" : ({ W: "Vitória registrada", L: "Derrota registrada", D: "Empate registrado" })[m.result] + " contra " + m.opp);

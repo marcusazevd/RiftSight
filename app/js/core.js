@@ -3,7 +3,7 @@ import * as S from "./store.js";
 import { $, $$ } from "./ui.js";
 import { BATTLEFIELDS, BANNED_BF } from "./data.js";
 
-export const APP_VERSION = "0.9.1 · Arcade";
+export const APP_VERSION = "0.9.2 · Arcade";
 export const RES = { W: "Vitória", L: "Derrota", D: "Empate" };
 export const RES_SHORT = { W: "V", L: "D", D: "E" };
 
@@ -85,6 +85,7 @@ export function showView(v, opts) {
   $$("nav button").forEach((b) => b.classList.toggle("on", b.dataset.t === v));
   $$("main > section").forEach((s) => s.classList.toggle("hide", s.id !== v));
   document.body.classList.toggle("live-on", v === "live");
+  document.body.classList.toggle("home-on", v === "add");
   if (views[v]) views[v](opts);
   window.scrollTo(0, 0);
 }

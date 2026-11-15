@@ -102,7 +102,7 @@ export function backupDue() {
   return newer && Date.now() - last > 14 * 864e5;
 }
 export function backupBanner() {
-  return backupDue() ? `<div class="evbar bk"><div><b>Hora do backup</b><div class="m">${prefs.lastBackup ? "Último há " + Math.floor((Date.now() - prefs.lastBackup) / 864e5) + " dias." : "Tu ainda não fez nenhum."}</div></div><div class="btns"><button class="btn" type="button" data-bk="later">Depois</button><button class="btn pri" type="button" data-bk="now">Fazer</button></div></div>` : "";
+  return backupDue() ? `<div class="bkline"><span>💾 Backup ${prefs.lastBackup ? "há " + Math.floor((Date.now() - prefs.lastBackup) / 864e5) + " dias" : "nunca feito"}</span><button type="button" data-bk="now">Fazer agora</button><button type="button" class="x" data-bk="later" aria-label="Depois">✕</button></div>` : "";
 }
 export async function handleBackupBanner(btn) {
   if (btn.dataset.bk === "later") { prefs.backupSnooze = Date.now(); savePrefs(); toast("Lembro em alguns dias"); return true; }
