@@ -86,6 +86,8 @@ export function showView(v, opts) {
   $$("main > section").forEach((s) => s.classList.toggle("hide", s.id !== v));
   document.body.classList.toggle("live-on", v === "live");
   document.body.classList.toggle("home-on", v === "add");
+  // o placar em tela cheia só existe no contador: ao sair, cabeçalho e navegação voltam
+  if (v !== "live") document.body.classList.remove("board-on");
   if (views[v]) views[v](opts);
   window.scrollTo(0, 0);
 }
