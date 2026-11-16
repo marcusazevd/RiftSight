@@ -1,8 +1,8 @@
 // Contador de pontos que vira partida registrada (M1) + tela ligada (M3).
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendColors, dialog, confirmBox, toast, RUNE } from "./ui.js";
-import { bfPicker, fmtClock, RES, prefs, savePrefs, fmtTime, knownBattlefields, resultFromGames, registerView, showView, readLive } from "./core.js";
-import { myLabel, pickerHTML, bindPickers, paintMatchup, versionField, newVersion, lastVersionId, versionName, nextRound, blankForm } from "./register.js";
+import { bfPicker, fmtClock, RES, prefs, savePrefs, fmtTime, knownMyBattlefields, knownOppBattlefields, resultFromGames, registerView, showView, readLive } from "./core.js";
+import { myLabel, pickerHTML, bindPickers, paintMatchup, versionField, newVersion, lastVersionId, versionName, nextRound, blankForm, savedToast } from "./register.js";
 
 const LIVE_KEY = "rbt_live";
 const WIN = 8;
@@ -70,15 +70,15 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 function bfOpts(list, used = []) { return list.filter((b) => !used.includes(b)).map((b) => `<option value="${esc(b)}">`).join(""); }
 function renderSetup() {
   const el = $("#live"), dk = L.deckId ? S.deck(L.deckId) : null, ev = L.eventId ? S.evt(L.eventId) : null;
-  const mine = dk ? (dk.battlefields || []).filter(Boolean) : knownBattlefields();
+  const mine = dk ? (dk.battlefields || []).filter(Boolean) : knownMyBattlefields();
   el.innerHTML = `<button class="btn" type="button" id="lv-back" style="margin-bottom:12px">‹ Voltar</button>
   <div class="card gold"><h2>Escolha as lendas</h2>
     <div class="mu"><div class="pick" id="lmy" data-side="my">${pickerHTML("my", L.my, myLabel(dk), true, L.deckId)}</div><div class="vs">VS</div><div class="pick" id="lopp" data-side="opp">${pickerHTML("opp", L.opp, "Oponente", false)}</div></div>
     <label for="lv-ver">Versão</label>${versionField("lv-ver", L.deckId, L.versionId, L.ver, "lv-vers")}
     <div class="seg c2 fmt" role="group" aria-label="Formato"><button type="button" data-fmt="bo1" class="${L.fmt !== "bo3" ? "on" : ""}">Partida única</button><button type="button" data-fmt="bo3" class="${L.fmt === "bo3" ? "on" : ""}">Melhor de 3</button></div>
     <div class="tg wide" role="group" aria-label="Quem começa"><span class="m">Quem começa?</span><button type="button" data-first="me" class="${L.first === "me" ? "on" : ""}">Eu</button><button type="button" data-first="opp" class="${L.first === "opp" ? "on" : ""}">Oponente</button><button type="button" data-first="coin">Sortear</button></div>
-    <div class="bfrow"><label>Meu battlefield</label>${bfPicker("lv-mybf", L.myBf, mine.length ? mine : knownBattlefields())}
-    <label>Do oponente</label>${bfPicker("lv-opbf", L.oppBf, knownBattlefields())}</div>
+    <div class="bfrow"><label>Meu battlefield</label>${bfPicker("lv-mybf", L.myBf, mine.length ? mine : knownMyBattlefields())}
+    <label>Do oponente</label>${bfPicker("lv-opbf", L.oppBf, knownOppBattlefields())}</div>
     <p class="m" style="margin:12px 0 0">${ev ? `Evento: <b>${esc(ev.name)}</b> · rodada ${nextRound(ev.id)}` : "Tipo de jogo: " + esc(L.ctx)}</p>
     <button class="go big-start" id="lv-start" type="button">COMEÇAR PARTIDA</button>
   </div>`;
@@ -212,13 +212,13 @@ function renderGameOver() {
 function renderBetween() {
   const el = $("#live"), ms = matchScore(), dk = L.deckId ? S.deck(L.deckId) : null;
   const usedMine = L.games.map((g) => g.myBf).filter(Boolean), usedOpp = L.games.map((g) => g.oppBf).filter(Boolean);
-  const mine = dk ? (dk.battlefields || []).filter(Boolean) : knownBattlefields();
+  const mine = dk ? (dk.battlefields || []).filter(Boolean) : knownMyBattlefields();
   const n = L.games.length + 1;
   el.innerHTML = `<div class="card gold"><h2>Game ${n}</h2><p class="score">Placar: <b>${ms.w}–${ms.l}</b></p>
     <p class="m">Quem perdeu o game anterior escolhe quem começa.</p>
     <div class="tg wide" role="group" aria-label="Quem começa"><span class="m">Quem começa?</span><button type="button" data-nf="me" class="${L.nextFirst === "me" ? "on" : ""}">Eu</button><button type="button" data-nf="opp" class="${L.nextFirst === "opp" ? "on" : ""}">Oponente</button></div>
-    <div class="bfrow"><label>Meu battlefield</label>${bfPicker("lv-mybf", "", [...usedMine, ...(mine.length ? mine : knownBattlefields())], usedMine)}
-    <label>Do oponente</label>${bfPicker("lv-opbf", "", [...usedOpp, ...knownBattlefields()], usedOpp)}
+    <div class="bfrow"><label>Meu battlefield</label>${bfPicker("lv-mybf", "", [...usedMine, ...(mine.length ? mine : knownMyBattlefields())], usedMine)}
+    <label>Do oponente</label>${bfPicker("lv-opbf", "", [...usedOpp, ...knownOppBattlefields()], usedOpp)}
     ${usedMine.length ? `<p class="m">No Bo3 o mesmo battlefield não se repete: ${esc(usedMine.join(", "))} já foi usado.</p>` : ""}</div>
     <button class="go" id="lv-next" type="button">COMEÇAR GAME ${n} ▶</button>
     <button class="btn full" id="lv-timeb" type="button" style="margin-top:10px">Encerrar por tempo</button></div>`;
@@ -263,6 +263,12 @@ async function saveLive() {
   const games = L.games.map((g) => ({ n: g.n, first: g.first || null, result: g.result, ...(g.unfinished ? { unfinished: true } : {}), myBf: g.myBf || null, oppBf: g.oppBf || null,
     points: { me: g.points.me, opp: g.points.opp }, log: g.log, startedAt: g.startedAt, endedAt: g.endedAt, time: g.time ? { me: Math.round(g.time.me), opp: Math.round(g.time.opp) } : null }));
   const ms = resultFromGames(games);
+  // resultado escolhido diferente do que o placar diz (ex.: 8–0 marcado como derrota): confirma antes
+  if (L.endedBy !== "time") {
+    const g1 = games[0], byScore = L.fmt === "bo3" ? (ms.w === ms.l ? "D" : ms.result) : g1 && !g1.unfinished ? g1.result : null;
+    const placar = L.fmt === "bo3" ? ms.w + "–" + ms.l : g1 ? g1.points.me + "–" + g1.points.opp : "";
+    if (byScore && byScore !== L.result && !(await confirmBox("Resultado diferente do placar", `O placar ${placar} indica ${RES[byScore].toLowerCase()}, mas o resultado marcado é ${RES[L.result].toLowerCase()}. Salvar assim mesmo?`, "Salvar assim"))) return;
+  }
   const playedAt = L.startedAt || Date.now();
   const m = { id: S.newId(), schema: S.SCHEMA, createdAt: Date.now(), playedAt, set: S.setForDate(playedAt), my: L.my, opp: L.opp,
     deckId: dk ? dk.id : null, versionId: dk ? L.versionId : null, version: dk ? versionName(dk, L.versionId) : L.ver,
@@ -275,8 +281,15 @@ async function saveLive() {
   try { ok = await S.saveMatch(m); } finally { saving = false; }
   if (!ok) { await dialog({ title: "Não foi possível salvar", body: "<p>O aparelho está sem espaço. A partida continua aqui no contador: faça um backup, remova fotos de lendas em Mais e tente salvar de novo.</p>" }); return; }
   L = null; persist(); wake(false);
+  // em evento, o próximo passo é a rodada seguinte: volta para Registrar com o banner atualizado
+  if (ev && ev.status === "open") { showView("add"); savedToast(m); return; }
   toast(({ W: "Vitória registrada", L: "Derrota registrada", D: "Empate registrado" })[m.result] + " contra " + m.opp);
   showView("hist");
+}
+// Botão voltar do Android: no setup (antes de começar) volta para Registrar; com partida em jogo não trata.
+export function liveBack() {
+  if (!L || L.phase !== "setup") return false;
+  L = null; persist(); showView("add"); return true;
 }
 
 async function menu() {

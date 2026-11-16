@@ -49,6 +49,21 @@ export function knownBattlefields() {
   S.getState().matches.forEach((m) => (m.games || []).forEach((g) => { add(g.myBf); add(g.oppBf); }));
   return [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR")).map((x) => x[0]);
 }
+// Sugestões separadas por lado: as do oponente só com battlefields que oponentes já usaram;
+// as minhas com os dos meus decks e os que eu já joguei.
+function countBf(add) {
+  const c = new Map(); add((b, w = 1) => { if (b) { const k = canonBf(b); c.set(k, (c.get(k) || 0) + w); } });
+  return [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR")).map((x) => x[0]);
+}
+export function knownOppBattlefields() {
+  return countBf((add) => S.getState().matches.forEach((m) => (m.games || []).forEach((g) => add(g.oppBf))));
+}
+export function knownMyBattlefields() {
+  return countBf((add) => {
+    S.getState().decks.forEach((d) => (d.battlefields || []).forEach((b) => add(b, 0.5)));
+    S.getState().matches.forEach((m) => (m.games || []).forEach((g) => add(g.myBf)));
+  });
+}
 // todos: catálogo (set mais novo primeiro) + nomes digitados que não estão nele
 export function allBattlefields() {
   const order = S.sets().map((s) => s.id).reverse();

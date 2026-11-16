@@ -306,8 +306,9 @@ body.board-on main{max-width:none;padding:0}
 .verdict{margin:12px 0 0;padding:10px 12px;border-left:3px solid var(--gold);background:var(--glow)}
 .evbar.bk{border-color:var(--gold)}
 .evbar .btns{flex:none}
-#toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px}
-#toast button{background:none;border:0;color:var(--gold2);font:700 14px var(--f-b);cursor:pointer;padding:4px 6px}
+/* aviso com ação (Desfazer): numa linha só quando couber, e só o botão recebe toque, para não travar o que está embaixo */
+#toast.act{pointer-events:none;display:flex;align-items:center;gap:12px;width:max-content;max-width:calc(100vw - 24px)}
+#toast button{background:none;border:0;color:var(--gold2);font:700 14px var(--f-b);cursor:pointer;padding:10px 8px;margin:-6px -4px;pointer-events:auto;flex:none}
 .st .nm .m{white-space:normal}
 
 /* ===== imagens das lendas ===== */

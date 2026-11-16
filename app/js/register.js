@@ -3,7 +3,7 @@ import { DOMAINS, LEGENDS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendInfo, legendColors, dialog, confirmBox, promptBox, toast, RUNE } from "./ui.js";
 import { backupBanner, handleBackupBanner } from "./views.js";
-import { bfPicker, RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownBattlefields, resultFromGames, eventRecord, registerView, showView, readLive } from "./core.js";
+import { bfPicker, RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownMyBattlefields, knownOppBattlefields, resultFromGames, eventRecord, registerView, showView, readLive } from "./core.js";
 
 let F;
 export function blankForm() {
@@ -15,13 +15,16 @@ export function blankForm() {
   return {
     editId: null, deckId: dk ? dk.id : null, versionId: dk ? lastVersionId(dk) : null,
     my: dk ? dk.legend : prefs.my || "", opp: "", ver: dk ? "" : prefs.ver || "",
-    ctx: ev ? ev.type : prefs.ctx || "Nexus Night", eventId: ev ? ev.id : null, round: null,
+    ctx: ev ? ev.type : freeCtx(), eventId: ev ? ev.id : null, round: null,
     turn: "", note: "", fmt: prefs.fmt || "bo1", result: "", myBf: "", oppBf: "",
     games: [g0(), g0(), g0()], timeDraw: false,
     date: toLocalInput(Date.now()), dateTouched: false, set: "", setTouched: false, details: false, manual: !!prefs.manual,
   };
 }
 const g0 = () => ({ first: "", result: "", myBf: "", oppBf: "" });
+// Fora de evento o tipo padrão é "Casual" (ou o último que o jogador escolheu fora de evento):
+// o tipo do último evento não vaza para as partidas soltas.
+export function freeCtx() { return EVENT_TYPES.includes(prefs.ctxOut) ? prefs.ctxOut : "Casual"; }
 export const lastVersionId = (dk) => (dk && dk.versions && dk.versions.length ? dk.versions[dk.versions.length - 1].id : null);
 export function versionName(dk, vid) { const v = dk && dk.versions ? dk.versions.find((x) => x.id === vid) : null; return v ? v.name : ""; }
 F = blankForm();
@@ -187,20 +190,34 @@ function statusStrip() {
     <div class="ss-last">${last.map((m) => `<span class="chip ${m.result}">${{ W: "V", L: "D", D: "E" }[m.result]}</span>`).join("")}${r === "W" && n > 1 ? `<span class="ss-streak">x${n}</span>` : ""}</div></div>`;
 }
 // ---------- render ----------
-function myBfOptions() { const dk = F.deckId ? S.deck(F.deckId) : null; const own = dk ? (dk.battlefields || []).filter(Boolean) : []; return own.length ? own : knownBattlefields(); }
+function myBfOptions() { const dk = F.deckId ? S.deck(F.deckId) : null; const own = dk ? (dk.battlefields || []).filter(Boolean) : []; return own.length ? own : knownMyBattlefields(); }
+
+// Bo3: os games valem em ordem, sem buraco, e o match acaba quando alguém chega a 2.
+// Devolve os games que contam (até a decisão) e se há game marcado depois de um em branco.
+function bo3Games() {
+  const used = []; let w = 0, l = 0, gap = false, hole = false;
+  for (const g of F.games) {
+    if (!g.result) { gap = true; continue; }
+    if (gap) { hole = true; break; }
+    if (w === 2 || l === 2) break;
+    used.push(g); if (g.result === "W") w++; else if (g.result === "L") l++;
+  }
+  return { used, hole };
+}
+const clearGame = (g) => { g.result = ""; g.first = ""; };
 
 function gamesHTML() {
   const rows = [];
   const g = F.games;
   const split = !!(g[0].result && g[1].result && g[0].result !== g[1].result);
-  const showG3 = !F.timeDraw && (split || g[2].result || g[2].first);
+  const showG3 = !F.timeDraw && split; // game 3 só existe com 1–1
   const n = showG3 ? 3 : 2;
   for (let i = 0; i < n; i++) {
     const x = g[i];
     rows.push(`<div class="gm" data-g="${i}"><div class="gh"><b>Game ${i + 1}</b>
       <div class="tg" role="group" aria-label="Quem começou o game ${i + 1}"><button type="button" data-f="me" class="${x.first === "me" ? "on" : ""}">Eu comecei</button><button type="button" data-f="opp" class="${x.first === "opp" ? "on" : ""}">Oponente</button></div></div>
       <div class="seg c2"><button type="button" class="W ${x.result === "W" ? "on" : ""}" data-gr="W">Ganhei</button><button type="button" class="L ${x.result === "L" ? "on" : ""}" data-gr="L">Perdi</button></div>
-      ${F.details ? `<div class="bfrow"><label>Meu battlefield</label>${bfPicker("gmy" + i, x.myBf, myBfOptions(), g.filter((_, k) => k !== i).map((y) => y.myBf).filter(Boolean))}<label>Do oponente</label>${bfPicker("gop" + i, x.oppBf, knownBattlefields(), g.filter((_, k) => k !== i).map((y) => y.oppBf).filter(Boolean))}</div>` : ""}</div>`);
+      ${F.details ? `<div class="bfrow"><label>Meu battlefield</label>${bfPicker("gmy" + i, x.myBf, myBfOptions(), g.filter((_, k) => k !== i).map((y) => y.myBf).filter(Boolean))}<label>Do oponente</label>${bfPicker("gop" + i, x.oppBf, knownOppBattlefields(), g.filter((_, k) => k !== i).map((y) => y.oppBf).filter(Boolean))}</div>` : ""}</div>`);
   }
   const r = resultFromGames(g.slice(0, n));
   const tie = split && !g[2].result;
@@ -217,8 +234,6 @@ function render() {
   const bo3 = F.fmt === "bo3";
   const dk = F.deckId ? S.deck(F.deckId) : null;
   const ev = F.eventId ? S.evt(F.eventId) : null;
-  const bfs = knownBattlefields();
-  const mine = dk ? (dk.battlefields || []).filter(Boolean) : bfs;
   const lv = readLive(), liveOn = !!(lv && lv.phase !== "setup");
   el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}
   ${F.editId ? "" : `<div class="herorow"><button class="go big-go" id="go-live" type="button"><span>NOVA PARTIDA<small>Contador de pontos${F.eventId && S.evt(F.eventId) ? " · rodada " + nextRound(F.eventId) : ""}</small></span></button>${S.openEvent() ? "" : `<button class="evchip" type="button" id="ev-start"><b>＋</b>EVENTO</button>`}</div>
@@ -231,7 +246,7 @@ function render() {
     </div>${bo3 ? "" : `<div class="optrow"><span class="ol">Começou</span><div class="tg" role="group" aria-label="Quem começou"><button type="button" data-t1="me" class="${F.turn === "me" ? "on" : ""}">Eu</button><button type="button" data-t1="opp" class="${F.turn === "opp" ? "on" : ""}">Oponente</button></div></div>`}
     ${bo3 ? `<div id="f-games">${gamesHTML()}</div>` : `
       <div class="seg c3" id="f-res" role="group" aria-label="Resultado">${["W", "L", "D"].map((k) => `<button type="button" class="${k} ${F.result === k ? "on" : ""}" data-r="${k}">${RES[k]}</button>`).join("")}</div>
-      ${F.details ? `<div class="bfrow"><label>Meu battlefield</label>${bfPicker("f-mybf", F.myBf, myBfOptions())}<label>Do oponente</label>${bfPicker("f-opbf", F.oppBf, knownBattlefields())}</div>` : ""}`}
+      ${F.details ? `<div class="bfrow"><label>Meu battlefield</label>${bfPicker("f-mybf", F.myBf, myBfOptions())}<label>Do oponente</label>${bfPicker("f-opbf", F.oppBf, knownOppBattlefields())}</div>` : ""}`}
     <button type="button" class="more-t" id="f-more" aria-expanded="${F.details}">${F.details ? "Menos detalhes ▴" : "Mais detalhes ▾"} <span class="m">${esc(ev ? ev.name + " · rodada " + (F.round || nextRound(ev.id)) : F.ctx)} · ${esc(S.sets().find((s) => s.id === F.set)?.name || "")} · ${fmtDate(fromLocalInput(F.date))}</span></button>
     <div class="${F.details ? "" : "hide"}">
       ${ev ? "" : `<label for="f-ctx">Tipo de jogo</label><select id="f-ctx">${EVENT_TYPES.map((c) => `<option${c === F.ctx ? " selected" : ""}>${c}</option>`).join("")}</select>`}
@@ -278,7 +293,7 @@ function bind() {
     if (b.id === "go-live") return showView("live", { setup: true });
     if (b.id === "go-resume") return showView("live");
     if (b.id === "ev-start") { const ev = await startEvent(); if (ev) { collect(); F.eventId = ev.id; F.ctx = ev.type; if (ev.deckId) { const d = S.deck(ev.deckId); F.deckId = d.id; F.my = d.legend; F.versionId = ev.versionId; } render(); } return; }
-    if (b.id === "ev-close") { const ev = S.openEvent(); if (ev && (await closeEvent(ev))) { F.eventId = null; render(); } return; }
+    if (b.id === "ev-close") { const ev = S.openEvent(); if (ev && (await closeEvent(ev))) { F.eventId = null; F.ctx = freeCtx(); render(); } return; }
     if (b.dataset.fmt) { collect(); F.fmt = b.dataset.fmt; F.result = ""; render(); return; }
     if (b.dataset.t1) { F.turn = F.turn === b.dataset.t1 ? "" : b.dataset.t1; $$("[data-t1]", el).forEach((x) => x.classList.toggle("on", x.dataset.t1 === F.turn)); return; }
     if (b.dataset.r) { F.result = b.dataset.r; $$("#f-res button", el).forEach((x) => x.classList.toggle("on", x === b)); return; }
@@ -290,9 +305,14 @@ function bind() {
       if (b.dataset.f) g.first = g.first === b.dataset.f ? "" : b.dataset.f;
       if (b.dataset.gr) {
         g.result = g.result === b.dataset.gr ? "" : b.dataset.gr;
+        // desmarcou um game: os seguintes deixam de valer (não existe game 3 sem game 2)
+        if (!g.result) F.games.slice(i + 1).forEach(clearGame);
+        // sem 1–1 não há game 3
+        const [a, c] = F.games;
+        if (!(a.result && c.result && a.result !== c.result)) { clearGame(F.games[2]); F.timeDraw = false; }
         // no Bo3, quem perdeu o game escolhe; sugestão: o perdedor começa o próximo
         const nx = F.games[i + 1];
-        if (nx && !nx.first && g.result) nx.first = g.result === "L" ? "me" : "opp";
+        if (nx && !nx.first && g.result && (i === 0 || (a.result && c.result && a.result !== c.result))) nx.first = g.result === "L" ? "me" : "opp";
       }
       $("#f-games").innerHTML = gamesHTML();
       return;
@@ -322,11 +342,15 @@ async function save() {
     if (!F.my) miss.push("teu deck ou tua lenda");
     if (!F.opp) miss.push("a lenda do oponente");
     if (!bo3 && !F.result) miss.push("o resultado: vitória, derrota ou empate");
-    if (bo3 && !F.timeResult) { const r0 = resultFromGames(F.games.filter((g) => g.result)); if (!(r0.w === 2 || r0.l === 2 || (F.timeDraw && r0.w === 1 && r0.l === 1))) miss.push("quem ganhou cada game, até alguém fazer 2 (ou empate por tempo no 1–1)"); }
+    if (bo3 && !F.timeResult) {
+      const b3 = bo3Games(), r0 = resultFromGames(b3.used);
+      if (b3.hole) miss.push("os games em ordem: há um game em branco antes de outro já marcado");
+      else if (!(r0.w === 2 || r0.l === 2 || (F.timeDraw && r0.w === 1 && r0.l === 1))) miss.push("quem ganhou cada game, até alguém fazer 2 (ou empate por tempo no 1–1)");
+    }
     if (miss.length) { await dialog({ title: "Falta pouco", body: "<p>Para salvar, falta marcar:</p><ul class=\"miss\">" + miss.map((x) => "<li>" + x + "</li>").join("") + "</ul>" }); return; }
   }
   if (bo3) {
-    const used = F.games.filter((g) => g.result);
+    const used = F.timeResult ? F.games.filter((g) => g.result) : bo3Games().used;
     const r = resultFromGames(used);
     const done = r.w === 2 || r.l === 2 || (F.timeDraw && r.w === 1 && r.l === 1);
     // partida do contador encerrada por tempo: mantém o resultado escolhido ao editar
@@ -362,17 +386,29 @@ async function save() {
     event: { type: ev ? ev.type : F.ctx, eventId: ev ? ev.id : null, round: ev ? (old && old.event && old.event.round) || nextRound(ev.id) : null },
     format: F.fmt, score, result, games, note: F.note, tags: (old && old.tags) || [],
   };
-  prefs.my = F.my; prefs.deckId = F.deckId; prefs.ver = F.ver; prefs.ctx = F.ctx; prefs.fmt = F.fmt; savePrefs();
+  prefs.my = F.my; prefs.deckId = F.deckId; prefs.ver = F.ver; prefs.fmt = F.fmt;
+  if (!ev && !old) prefs.ctxOut = F.ctx; // o tipo escolhido fora de evento é lembrado à parte do tipo do evento
+  savePrefs();
   saving = true;
   let ok = false;
   try { ok = await S.saveMatch(m); } finally { saving = false; }
   if (!ok) { await dialog({ title: "Não foi possível salvar", body: "<p>O aparelho está sem espaço. O formulário continua preenchido: faça um backup, remova fotos de lendas em Mais e tente de novo.</p>" }); return; }
   const wasEdit = !!old;
-  const keep = { details: F.details, manual: F.manual };
-  F = { ...blankForm(), ...keep };
+  // formulário novo, com "Mais detalhes" fechado: a próxima rodada começa limpa
+  F = { ...blankForm(), manual: F.manual, details: false };
   render();
-  toast(wasEdit ? "Partida atualizada" : ({ W: "Vitória registrada", L: "Derrota registrada", D: "Empate registrado" })[m.result] + " contra " + m.opp);
-  if (wasEdit) showView("hist");
+  if (wasEdit) { toast("Partida atualizada"); showView("hist"); return; }
+  window.scrollTo(0, 0); // de volta ao topo: banner do evento e recorde à vista
+  savedToast(m);
+}
+// Aviso depois de salvar: rodada, resultado, placar, oponente e recorde do evento, com Desfazer.
+// Ex.: "R3 · Vitória 2–1 vs Kai'Sa · evento 2–1". Desfazer apaga a partida recém-salva.
+export function savedToast(m) {
+  const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null, g1 = m.games && m.games[0];
+  const sc = m.score ? m.score.replace("-", "–") : m.format !== "bo3" && g1 && g1.points ? g1.points.me + "–" + g1.points.opp : "";
+  let msg = (ev && m.event.round ? "R" + m.event.round + " · " : "") + RES[m.result] + (sc ? " " + sc : "") + " vs " + m.opp;
+  if (ev) { const r = eventRecord(ev); msg += ` · evento ${r.w}–${r.l}${r.d ? "–" + r.d : ""}`; }
+  toast(msg, { label: "Desfazer", fn: async () => { if (await S.deleteMatch(m.id)) toast("Registro desfeito: a partida foi apagada"); } }, 8000);
 }
 
 export function editMatch(id) {
@@ -402,5 +438,5 @@ export function refreshAdd() {
   // não redesenha se um seletor de lenda estiver aberto
   if (!document.querySelector("#add .pl:not(.hide)")) render();
 }
-registerView("add", () => { collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) F.eventId = null; } render(); });
+registerView("add", () => { collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) { F.eventId = null; F.ctx = freeCtx(); } } render(); });
 export function initRegister() { bind(); }
