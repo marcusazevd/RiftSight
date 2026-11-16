@@ -159,7 +159,8 @@ function matchups(d) {
   const mx = matrix(d);
   if (!mx.rowKeys.length) return "";
   const cols = mx.colKeys.slice(0, 6), multi = cols.length > 1;
-  const cell = (r) => (r.n ? `<td class="${r.n < FEW ? "few" : ""}" style="${heat(r.p, r.n)}"><b>${pct(r.p)}</b><small>${rec(r)}</small></td>` : `<td class="na">—</td>`);
+  // texto escuro sobre verde/rosa (fundos claros) e branco sobre o cinza do meio, pelo contraste
+  const cell = (r) => { if (!r.n) return `<td class="na">—</td>`; const k = inkOn(heatColor(r.p)); return `<td class="${r.n < FEW ? "few " : ""}${k.dark ? "dk" : "lt"}" style="background:${k.bg}"><b>${pct(r.p)}</b><small>${rec(r)}</small></td>`; };
   const scale = Array.from({ length: 11 }, (_, i) => `<i style="background:${heatColor(i / 10)}"></i>`).join("");
   return `<div class="card"><h2>Matriz de matchups</h2><p class="m" style="margin-top:0">Verde: ganhando. Rosa: perdendo. Cinza: equilibrado. Listrado: menos de ${FEW} partidas. Toque numa linha para abrir o matchup.</p>
     <div class="mxw"><table class="mx"><thead><tr><th></th>${multi ? '<th class="tot">Total</th>' : ""}${cols.map((c) => `<th title="${esc(sideLabel(c))}"><span>${esc(sideLabel(c))}</span></th>`).join("")}</tr></thead>

@@ -1,6 +1,6 @@
 // Contador de pontos que vira partida registrada (M1) + tela ligada (M3).
 import * as S from "./store.js";
-import { esc, $, $$, avatar, domainPair, legendColors, dialog, confirmBox, toast, RUNE } from "./ui.js";
+import { esc, $, $$, avatar, domainPair, legendColors, dialog, confirmBox, toast, RUNE, inkOn } from "./ui.js";
 import { bfPicker, fmtClock, RES, prefs, savePrefs, fmtTime, knownMyBattlefields, knownOppBattlefields, resultFromGames, registerView, showView, readLive } from "./core.js";
 import { myLabel, pickerHTML, bindPickers, paintMatchup, versionField, newVersion, lastVersionId, versionName, nextRound, blankForm, savedToast } from "./register.js";
 
@@ -108,7 +108,9 @@ function panel(side) {
   const g = G(), name = side === "me" ? L.my : L.opp, pts = g.points[side], act = active(g) === side;
   const [a, b] = legendColors(name), s = sourcesOf(g, side);
   const label = side === "me" ? (L.deckId && S.deck(L.deckId) ? S.deck(L.deckId).name : name) : name;
-  return `<div class="pn ${side} ${act ? "act" : ""}" style="--a:${a};--b:${b}">
+  // CONQUER/HOLD levam a cor do domínio: o texto fica escuro nos domínios claros (Ordem, Corpo, Calma, Mente)
+  const ka = inkOn(a), kb = inkOn(b);
+  return `<div class="pn ${side} ${act ? "act" : ""}" style="--a:${a};--b:${b};--ca:${ka.bg};--ia:${ka.ink};--cb:${kb.bg};--ib:${kb.ink}">
     <div class="pn-h">${avatar(name, 44)}<div class="pn-n"><div class="pn-t"><span>${esc(label).toUpperCase()}</span><span class="clk${act ? " on" : ""}">⏱ <b id="clk-${side}">${fmtClock(liveTime(g, side))}</b></span></div>${segBar(g, side, name)}
       <div class="pn-s2"><span class="${act ? "turn" : ""}">${act ? (side === "me" ? "TEU TURNO" : "TURNO DELE") : ""}</span><span class="srcs">C${s.conquer} · H${s.hold}${s.other ? " · +" + s.other : ""}</span></div></div>
       <output class="pts" aria-live="polite">${pts}</output></div>
