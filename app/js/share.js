@@ -1,6 +1,6 @@
 // Card compartilhável (T5): imagem PNG do evento ou do deck + texto pronto.
 import * as S from "./store.js";
-import { record, group } from "./stats.js";
+import { record, group, hardestMatchup, bestMatchup } from "./stats.js";
 import { RES_SHORT, eventRecord, fmtDate } from "./core.js";
 import { esc, $, dialog, toast, legendColors, legendInfo, setInfo } from "./ui.js";
 import { DOMAINS } from "./data.js";
@@ -137,13 +137,15 @@ async function deckCanvas(dk) {
     }
     y += 24;
   }
-  const mus = group(all, (m) => m.opp).filter((x) => x.n >= 2).sort((a, b) => b.p - a.p || b.n - a.n);
-  if (mus.length) {
+  // mesma conta da aba Matchups: o que mais pesa a favor e contra (frequência × taxa suavizada)
+  const bestMu = bestMatchup(all), hardMu = hardestMatchup(all);
+  const pick = [bestMu && ["MELHOR", bestMu, C.win], hardMu && ["MAIS DIFÍCIL", hardMu, C.loss]].filter(Boolean);
+  if (pick.length) {
     text(ctx, "MATCHUPS", 72, y, `20px ${D}`, C.cyan); y += 24;
     const pick = mus.length > 1 ? [["MELHOR", mus[0]], ["MAIS DIFÍCIL", mus[mus.length - 1]]] : [["MELHOR", mus[0]]];
     for (const [lbl, mu] of pick) {
       await avatar(ctx, mu.k, 72, y + 6, 72);
-      text(ctx, lbl, 172, y + 36, `16px ${D}`, lbl === "MELHOR" ? C.win : C.loss);
+      text(ctx, lbl + (mu.few ? " (POUCOS DADOS)" : ""), 172, y + 36, `16px ${D}`, col);
       text(ctx, mu.k, 172, y + 72, `700 32px ${B}`, C.tx, "left", 520);
       text(ctx, `${recStr(mu)}  ${Math.round(mu.p * 100)}%`, W - 72, y + 60, `20px ${D}`, C.tx, "right"); y += 100;
     }

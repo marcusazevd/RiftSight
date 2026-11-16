@@ -140,6 +140,28 @@ export function matrix(list) {
 // Taxa suavizada: puxa amostras pequenas na direção de uma taxa de referência.
 export const smooth = (w, n, prior, k = 3) => (w + k * prior) / (n + k);
 
+// Peso de cada matchup no teu resultado: frequência × taxa suavizada. É a mesma conta em todo lugar
+// (aba Matchups, destaques da aba Geral e card do deck), para as telas não se contradizerem.
+export const FEW_MU = 5;
+export function matchupWeights(list) {
+  const by = new Map(); list.forEach((m) => { if (!by.has(m.opp)) by.set(m.opp, []); by.get(m.opp).push(m); });
+  return [...by.entries()].map(([opp, ms]) => {
+    const r = record(ms), share = ms.length / list.length, sm = smooth(r.w, r.n, 0.5);
+    return { k: opp, opp, ...r, share, sm, risk: share * (1 - sm), gain: share * sm, few: r.n < FEW_MU };
+  });
+}
+// O que mais pesa contra: frequente e com taxa suavizada baixa (mínimo de 2 partidas).
+export function hardestMatchup(list) {
+  let best = null;
+  for (const x of matchupWeights(list)) { if (x.n < 2) continue; if (!best || x.risk > best.risk) best = x; }
+  return best && best.p < 0.5 ? best : null;
+}
+// O que mais pesa a favor. Prefere matchups com 5+ partidas; sem nenhum, devolve o melhor com a marca few ("poucos dados").
+export function bestMatchup(list) {
+  const c = matchupWeights(list).filter((x) => x.n >= 2 && x.p > 0.5).sort((a, b) => b.gain - a.gain || b.n - a.n);
+  return c.find((x) => !x.few) || c[0] || null;
+}
+
 // Recomendação para o torneio: para cada versão, win rate esperado contra o "campo"
 // (lendas que tu mais enfrentou), usando taxa por matchup suavizada pela taxa geral da versão.
 export function recommend(list, fieldList) {
@@ -158,12 +180,14 @@ export function recommend(list, fieldList) {
       exp += (f / totalField) * smooth(mr.w, mr.n, base);
       if (mr.n) covered += f;
     }
-    out.push({ ver, n: r.n, w: r.w, p: r.p, expected: totalField ? exp : base, coverage: totalField ? covered / totalField : 0, ci: wilson(r.w, r.n) });
+    const bySet = new Map(); ms.forEach((m) => bySet.set(m.set, (bySet.get(m.set) || 0) + 1));
+    out.push({ ver, n: r.n, w: r.w, p: r.p, expected: totalField ? exp : base, coverage: totalField ? covered / totalField : 0, ci: wilson(r.w, r.n),
+      sets: [...bySet.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0]) });
   }
   out.sort((a, b) => b.expected - a.expected);
   const practice = [...field.entries()].map(([opp, f]) => {
     const mr = record(list.filter((m) => m.opp === opp));
-    return { opp, share: f / totalField, ...mr, risk: (f / totalField) * (1 - smooth(mr.w, mr.n, 0.5)) };
+    return { opp, share: f / totalField, ...mr, sm: smooth(mr.w, mr.n, 0.5), risk: (f / totalField) * (1 - smooth(mr.w, mr.n, 0.5)) };
   }).sort((a, b) => b.risk - a.risk);
   return { versions: out, practice, fieldSize: totalField };
 }

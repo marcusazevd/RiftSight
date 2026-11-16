@@ -1,8 +1,8 @@
 // Tela "Estatísticas": Geral, Matchups (matriz + página do matchup), Versões e Torneio.
 import { EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
-import { timeStats, pointSources, verKey, record, gameRecord, group, applyFilters, insights, gameRows, firstLabel, wilson, confidence, sideKey, matrix, recommend, smooth, streak } from "./stats.js";
-import { esc, $, $$, avatar, legendColors, domainPair, setBadge, setInfo } from "./ui.js";
+import { timeStats, pointSources, verKey, record, gameRecord, group, applyFilters, insights, gameRows, firstLabel, wilson, confidence, sideKey, matrix, recommend, smooth, streak, hardestMatchup, bestMatchup } from "./stats.js";
+import { esc, $, $$, avatar, legendColors, domainPair, setBadge, setInfo, inkOn } from "./ui.js";
 import { RES, RES_SHORT, setName, fmtDate, registerView, fmtClock, canonBf } from "./core.js";
 
 const FL = { set: "", ctx: "", my: "", ver: "", opp: "", per: "" };
@@ -121,10 +121,11 @@ function highlights(d) {
   const decks = new Set(d.map(sideKey));
   const vr = group(d, decks.size > 1 ? verKey : (m) => m.version).filter((r) => r.n >= 3);
   if (vr.length) { const v = vr[0], o = vr[1]; tiles.push(`<div class="tile"><div class="k">Melhor versão</div><div class="v">${esc(v.k)}</div><div class="vp ${tone(v.p)}">${pct(v.p)}</div><div class="m">${rec(v)}${o ? ` · ${esc(o.k)}: ${pct(o.p)}` : ""}</div></div>`); }
-  const mr = group(d, (m) => m.opp).filter((r) => r.n >= 2);
-  const worst = mr.slice().sort((a, b) => a.p - b.p || b.n - a.n)[0], best = mr[0];
-  if (worst && worst.p < 0.5) tiles.push(`<button class="tile" data-goto-mu="${esc(worst.k)}"><div class="k">Mais difícil</div><div class="v">${avatar(worst.k, 22)}${esc(worst.k)}</div><div class="vp l">${pct(worst.p)}</div><div class="m">${rec(worst)} · treinar ›</div></button>`);
-  if (best && best.p > 0.5) tiles.push(`<button class="tile" data-goto-mu="${esc(best.k)}"><div class="k">Melhor matchup</div><div class="v">${avatar(best.k, 22)}${esc(best.k)}</div><div class="vp w">${pct(best.p)}</div><div class="m">${rec(best)} ›</div></button>`);
+  // mesma conta da aba Matchups: o que mais pesa (frequência × taxa suavizada), não o extremo com 2 partidas
+  const worst = hardestMatchup(d), best = bestMatchup(d);
+  const fewTxt = (x) => (x.few ? " (poucos dados)" : "");
+  if (worst) tiles.push(`<button class="tile" data-goto-mu="${esc(worst.k)}"><div class="k">Mais difícil</div><div class="v">${avatar(worst.k, 22)}${esc(worst.k)}</div><div class="vp l">${pct(worst.p)}</div><div class="m">${rec(worst)}${fewTxt(worst)} · treinar ›</div></button>`);
+  if (best) tiles.push(`<button class="tile" data-goto-mu="${esc(best.k)}"><div class="k">Melhor matchup</div><div class="v">${avatar(best.k, 22)}${esc(best.k)}</div><div class="vp w">${pct(best.p)}</div><div class="m">${rec(best)}${fewTxt(best)} ›</div></button>`);
   const tr = group(gameRows(d), firstLabel);
   const f1 = tr.find((r) => r.k === "Começando"), f2 = tr.find((r) => r.k === "Em segundo");
   if (f1 && f2) { const top = f1.p >= f2.p ? ["Começando", f1, f2, "em segundo"] : ["Em segundo", f2, f1, "começando"]; tiles.push(`<div class="tile"><div class="k">Turno</div><div class="v">${top[0]}</div><div class="vp ${tone(top[1].p)}">${pct(top[1].p)}</div><div class="m">${top[3]}: ${pct(top[2].p)} (por game)</div></div>`); }
@@ -168,15 +169,9 @@ function matchups(d) {
 }
 // Matchup que mais pesa contra ti: frequente e com win rate baixo (suavizado).
 function hardest(d) {
-  const by = new Map(); d.forEach((m) => { if (!by.has(m.opp)) by.set(m.opp, []); by.get(m.opp).push(m); });
-  let best = null;
-  for (const [opp, ms] of by) {
-    const r = record(ms); if (r.n < 2) continue;
-    const share = ms.length / d.length, risk = share * (1 - smooth(r.w, r.n, 0.5));
-    if (!best || risk > best.risk) best = { opp, r, share, risk };
-  }
-  if (!best || best.r.p >= 0.5) return "";
-  return `<div class="card boss"><h2>Matchup mais difícil</h2><div class="muh" style="margin:0">${avatar(best.opp, 44)}<div style="flex:1"><b>${esc(best.opp)} · <span class="l">${pct(best.r.p)}</span></b><div class="m">${rec(best.r)} · aparece em ${pct(best.share)} das tuas partidas</div>${wr(best.r)}</div></div><p class="m" style="margin:8px 0 0">Treinar este matchup é o que mais sobe teu win rate.</p></div>`;
+  const best = hardestMatchup(d);
+  if (!best) return "";
+  return `<div class="card boss"><h2>Matchup mais difícil</h2><div class="muh" style="margin:0">${avatar(best.opp, 44)}<div style="flex:1"><b>${esc(best.opp)} · <span class="l">${pct(best.p)}</span></b><div class="m">${rec(best)} · aparece em ${pct(best.share)} das tuas partidas</div>${wr(best)}</div></div><p class="m" style="margin:8px 0 0">Treinar este matchup é o que mais sobe teu win rate.</p></div>`;
 }
 function matchupPage(d, opp) {
   const ms = d.filter((m) => m.opp === opp), r = record(ms), gr = gameRows(ms), cf = confidence(r.n, r.w);
@@ -236,19 +231,25 @@ function torneio(all) {
   if (!TR.side || !sd.includes(TR.side)) TR.side = sd[0];
   const curSet = S.setForDate(Date.now());
   const fieldList = TR.field === "set" ? all.filter((m) => m.set === curSet) : TR.field === "30" ? all.filter((m) => m.playedAt >= Date.now() - 30 * 864e5) : all;
-  const mine = sideMatches(TR.field === "set" ? all.filter((m) => m.set === curSet) : TR.field === "30" ? fieldList : all, TR.side);
+  // todas as versões do deck entram na conta, mesmo as jogadas em outro set (a origem dos dados vai indicada)
+  const mine = sideMatches(all, TR.side);
   let h = `<div class="card gold"><h2>Preparação para o torneio</h2><p class="m" style="margin-top:0">Estima o desempenho de cada versão contra as lendas que tu mais enfrenta, pesando cada matchup pela frequência. Matchups com poucas partidas puxam para a média da versão.</p>
     <div class="fl">${sel("tr_side", "", sd, TR.side, sideLabel)}${sel("tr_field", "", ["set", "30", "all"], TR.field, (v) => ({ set: "Campo: " + setName(curSet), "30": "Campo: 30 dias", all: "Campo: tudo" })[v])}</div>`;
   if (!mine.length || !fieldList.length) return h + '<p class="m">Sem partidas suficientes nesse recorte.</p></div>';
   const R = recommend(mine, fieldList);
-  const best = R.versions[0];
-  h += best ? `<p class="verdict">Recomendação: <b>${esc(best.ver)}</b> · ${pct(best.expected)} esperado contra o campo${R.versions.length > 1 && best.expected - R.versions[1].expected < 0.04 ? ", praticamente empatada com " + esc(R.versions[1].ver) : ""}.${best.n < 8 ? " Ainda com poucas partidas: trate como palpite." : ""}</p>` : "";
-  h += `<div class="pg">Esperado contra o campo</div>${R.versions.map((v, i) => { const e = { w: Math.round(v.expected * 100), n: 100, p: v.expected, l: 0 };
-      return `<div class="br${i === 0 ? " best" : ""}"><div class="nm">${esc(v.ver)}${i === 0 ? " ★" : ""}<small>real ${pct(v.p)} em ${v.n} · cobre ${pct(v.coverage)}</small></div><div class="wr ${tone(v.expected)}"><span class="wf" style="left:${Math.min(v.expected, 0.5) * 100}%;width:${Math.abs(v.expected - 0.5) * 100}%"></span><span class="w50"></span><span class="wp" style="left:${v.expected * 100}%"></span></div><div class="pc ${tone(v.expected)}">${pct(v.expected)}</div></div>`; }).join("")}${AXIS}
+  const best = R.versions[0], many = R.versions.length > 1;
+  // de onde vêm os dados de cada versão, quando não são (só) do set atual
+  const from = (v) => (v.sets.some((s) => s !== curSet) ? "dados de " + v.sets.map((s) => setName(s)).join(", ") : "");
+  if (best && many) h += `<p class="verdict">Recomendação: <b>${esc(best.ver)}</b> · ${pct(best.expected)} esperado contra o campo${best.expected - R.versions[1].expected < 0.04 ? ", praticamente empatada com " + esc(R.versions[1].ver) : ""}.${best.n < 8 ? " Ainda com poucas partidas: trate como palpite." : ""}</p>`;
+  else if (best) h += `<p class="verdict">Só a versão <b>${esc(best.ver)}</b> tem partidas com este deck: sem outra para comparar, não há recomendação. Contra o campo ela rende cerca de ${pct(best.expected)}.${best.n < 8 ? " Ainda com poucas partidas: trate como palpite." : ""}</p>`;
+  h += `<div class="pg">Esperado contra o campo</div>${R.versions.map((v, i) => { const top = many && i === 0, src = from(v);
+      return `<div class="br${top ? " best" : ""}"><div class="nm">${esc(v.ver)}${top ? " ★" : ""}<small>real ${pct(v.p)} em ${v.n} · cobre ${pct(v.coverage)}${src ? " · " + esc(src) : ""}</small></div><div class="wr ${tone(v.expected)}"><span class="wf" style="left:${Math.min(v.expected, 0.5) * 100}%;width:${Math.abs(v.expected - 0.5) * 100}%"></span><span class="w50"></span><span class="wp" style="left:${v.expected * 100}%"></span></div><div class="pc ${tone(v.expected)}">${pct(v.expected)}</div></div>`; }).join("")}${AXIS}
     <p class="m">"Cobre": parte do campo contra a qual essa versão já jogou.</p></div>`;
   const field = R.practice.slice().sort((a, b) => b.share - a.share);
   h += `<div class="card"><h2>O campo</h2><p class="m" style="margin-top:0">Quem tu mais enfrenta neste recorte.</p>${field.slice(0, 8).map((x) => `<div class="fr">${avatar(x.opp, 24)}<div class="nm">${esc(x.opp)}</div><div class="fbar"><i style="width:${x.share * 100}%"></i></div><div class="m">${pct(x.share)}</div></div>`).join("")}</div>`;
-  h += `<div class="card"><h2>Matchups para treinar</h2><p class="m" style="margin-top:0">Os que mais pesam: frequentes e com win rate baixo.</p>${R.practice.slice(0, 6).map((x) => x.n ? `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>${rec(x)} · ${pct(x.share)} do campo</small></div>${wr(x)}<div class="pc ${tone(x.p)}">${pct(x.p)}</div></div>` : `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>nunca jogou · ${pct(x.share)} do campo</small></div><div></div><div class="pc">—</div></div>`).join("")}${AXIS}</div>`;
+  // só entra o que está abaixo de 50% (taxa suavizada) ou que este deck ainda não enfrentou
+  const train = R.practice.filter((x) => !x.n || x.sm < 0.5).slice(0, 6);
+  h += `<div class="card"><h2>Matchups para treinar</h2><p class="m" style="margin-top:0">Os que mais pesam: frequentes no campo e com win rate abaixo de 50%, ou que este deck ainda não enfrentou.</p>${!train.length ? '<p class="m">Nenhum matchup do campo está abaixo de 50% com este deck.</p>' : train.map((x) => x.n ? `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>${rec(x)} · ${pct(x.share)} do campo</small></div>${wr(x)}<div class="pc ${tone(x.p)}">${pct(x.p)}</div></div>` : `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>nunca jogou com este deck · ${pct(x.share)} do campo</small></div><div></div><div class="pc">—</div></div>`).join("") + AXIS}</div>`;
   return h;
 }
 
