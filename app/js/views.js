@@ -160,8 +160,8 @@ function renderMore() {
     const ds = st.decks.slice().sort((a, b) => (a.archived - b.archived) || a.name.localeCompare(b.name));
     el.innerHTML = back + `<div class="card"><h2>Meus decks</h2>${ds.length ? ds.map((d) => {
       const ms = st.matches.filter((m) => m.deckId === d.id), r = record(ms), last = (d.versions || [])[d.versions.length - 1];
-      return `<button class="li dkrow${d.archived ? " arch" : ""}" data-dk="${d.id}" type="button">${avatar(d.legend, 40)}<span><b>${esc(d.name)}</b><span class="m" style="display:block">${esc(d.legend)} · ${last ? esc(last.name) : "sem versão"}${d.archived ? " · arquivado" : ""}</span></span><span class="m">${r.n ? r.w + "-" + r.l + (r.d ? "-" + r.d : "") : ""}</span>›</button>`;
-    }).join("") : '<p class="m">Cadastre teus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
+      return `<button class="li dkrow${d.archived ? " arch" : ""}" data-dk="${esc(d.id)}" type="button">${avatar(d.legend, 40)}<span class="dk-n"><b>${esc(d.name)}</b><span class="m">${esc(d.legend)} · ${last ? esc(last.name) : "sem versão"}${d.archived ? " · arquivado" : ""}</span></span><span class="m dk-r">${r.n ? r.w + "–" + r.l + (r.d ? "–" + r.d : "") : ""}</span><i aria-hidden="true">›</i></button>`;
+    }).join("") + "</div>" : '<p class="m">Cadastre teus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
     <button class="btn pri" id="dk-new" type="button" style="margin-top:12px">＋ Novo deck</button></div>`;
     return;
   }
