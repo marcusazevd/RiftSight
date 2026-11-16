@@ -125,9 +125,14 @@ function androidBridge() {
   // backup automático: um arquivo fixo em Downloads, regravado após cada mudança (nunca vazio)
   let t = null;
   S.subscribe((st) => {
-    if (st.loading || !st.matches.length) return;
-    clearTimeout(t);
-    t = setTimeout(() => { try { if (window.RBTAndroid.autoBackup) window.RBTAndroid.autoBackup(JSON.stringify(S.exportData())); } catch (e) {} }, 3000);
+    if (st.loading) return;
+    clearTimeout(t); t = null;
+    // histórico vazio nunca vai para o arquivo: cancela o que estava agendado e confere de novo na hora de gravar
+    if (!st.matches.length) return;
+    t = setTimeout(() => {
+      t = null;
+      try { if (S.getState().matches.length && window.RBTAndroid.autoBackup) window.RBTAndroid.autoBackup(JSON.stringify(S.exportData())); } catch (e) {}
+    }, 3000);
   });
   try { navigator.vibrate = (p) => { try { window.RBTAndroid.vibrate(JSON.stringify(p)); } catch (e) {} return true; }; } catch (e) {}
   window.__rbtBack = () => {
