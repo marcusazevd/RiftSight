@@ -3,7 +3,7 @@ import * as S from "./store.js";
 import { $, $$ } from "./ui.js";
 import { BATTLEFIELDS, BANNED_BF } from "./data.js";
 
-export const APP_VERSION = "0.9.2 · Arcade";
+export const APP_VERSION = "0.9.3 · Arcade";
 export const RES = { W: "Vitória", L: "Derrota", D: "Empate" };
 export const RES_SHORT = { W: "V", L: "D", D: "E" };
 
