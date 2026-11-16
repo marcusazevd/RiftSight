@@ -227,6 +227,7 @@ footer.fan{max-width:560px;margin:4px auto 0;padding:0 16px;text-align:center;fo
 .evr:first-of-type{border:0}
 .evr .b{flex:1;min-width:0}
 .evs{margin-top:4px;font-size:14px}
+.ord{font-family:system-ui,-apple-system,Roboto,Arial,sans-serif;font-size:.85em;font-weight:600}
 .live-dot{font-size:11px;color:var(--win);font-weight:700}
 .live-dot::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--win);margin-right:4px;animation:blink 1.6s infinite}
 @keyframes blink{50%{opacity:.25}}

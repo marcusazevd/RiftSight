@@ -2,7 +2,7 @@
 import { DOMAINS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { record, gameRecord, group, applyFilters, insights, toCSV, gameRows, firstLabel } from "./stats.js";
-import { esc, $, $$, avatar, domainPair, domainIcon, legendColors, dialog, confirmBox, toast, RUNE, setBadge } from "./ui.js";
+import { esc, $, $$, avatar, domainPair, domainIcon, legendColors, dialog, confirmBox, toast, RUNE, setBadge, ord } from "./ui.js";
 import { RES, RES_SHORT, APP_VERSION, prefs, savePrefs, applyTheme, setName, fmtDate, eventRecord, registerView, showView, knownBattlefields, canonBf } from "./core.js";
 import { editMatch, legendOptions, bindPickers, startEvent, closeEvent } from "./register.js";
 import { LEGENDS } from "./data.js";
@@ -36,13 +36,13 @@ function renderHist() {
       const es = evs.filter((e) => e.type === t), recs = es.map(eventRecord);
       const w = recs.reduce((a, r) => a + r.w, 0), l = recs.reduce((a, r) => a + r.l, 0), d = recs.reduce((a, r) => a + r.d, 0);
       const places = es.map((e) => e.placement).filter(Boolean), tops = es.filter((e) => e.topCut).length;
-      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + Math.min(...places) + "º · média: " + (places.reduce((a, b) => a + b, 0) / places.length).toFixed(1) + "º" : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${w}-${l}${d ? "-" + d : ""}</div><div class="pc">${w + l + d ? Math.round((w / (w + l + d)) * 100) + "%" : "—"}</div></div>`;
+      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + ord(Math.min(...places)) : ""}${places.length > 1 ? " · média: " + ord((places.reduce((a, b) => a + b, 0) / places.length).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${w}-${l}${d ? "-" + d : ""}</div><div class="pc">${w + l + d ? Math.round((w / (w + l + d)) * 100) + "%" : "—"}</div></div>`;
     }).join("")}</div>` : "";
     el.innerHTML = tabs + summary + `<div class="card"><h2>Eventos</h2>${evs.length ? evs.map((ev) => {
       const r = eventRecord(ev), dk = ev.deckId ? S.deck(ev.deckId) : null;
       return `<div class="evr ${ev.status === "open" ? "open" : "closed"}"><div class="b"><span class="tag">${esc(ev.type)}</span><b>${esc(ev.name)}</b>${ev.status === "open" ? ' <span class="live-dot">em andamento</span>' : ""}
         <div class="m">${fmtDate(ev.date)}${ev.place ? " · " + esc(ev.place) : ""}${dk ? " · " + esc(dk.name) : ""}</div>
-        <div class="evs"><b>${r.w}-${r.l}${r.d ? "-" + r.d : ""}</b>${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
+        <div class="evs"><b>${r.w}-${r.l}${r.d ? "-" + r.d : ""}</b>${ev.placement ? ` · ${ord(ev.placement)}${ev.players ? " de " + esc(ev.players) : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
         ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${esc(m.result)}" title="Rodada ${esc(m.event.round || "?")}: ${RES[m.result]} vs ${esc(m.opp)}">R${esc(m.event.round || "?")} ${RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
         ${ev.note ? `<div class="m">${esc(ev.note)}</div>` : ""}</div>
         <div class="evbtns">${r.n ? `<button class="x" data-evshare="${esc(ev.id)}" aria-label="Card para compartilhar" title="Card para compartilhar">⇪</button>` : ""}${ev.status === "open" ? `<button class="btn" data-evclose="${esc(ev.id)}" type="button">Encerrar</button>` : `<button class="x" data-evdel="${esc(ev.id)}" aria-label="Apagar evento">✕</button>`}</div></div>`;

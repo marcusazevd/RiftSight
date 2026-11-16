@@ -73,6 +73,25 @@ export function setBadge(id, { full = false } = {}) {
   const s = setInfo(id);
   return `<span class="setb" style="--sc:${esc(s.color)}" title="${esc(s.name)}">${setGlyph(id)}${esc(full ? s.name : s.id)}</span>`;
 }
+// Ordinal ("5º"): a fonte do corpo desenha o "º" como um "o" na linha de base, então o sinal vai na fonte do sistema.
+export const ord = (n) => `${esc(n)}<span class="ord">º</span>`;
+
+// ---------- contraste ----------
+// Cor do texto sobre um fundo colorido (botões de domínio, células da matriz): texto escuro em fundo claro,
+// branco em fundo escuro. Se nenhum dos dois chega a 4,5:1, o fundo escurece um pouco até o branco chegar.
+const INK = "#120c22";
+const rgbOf = (c) => { const s = String(c).trim(); if (s[0] === "#") { const h = s.length === 4 ? [...s.slice(1)].map((x) => x + x).join("") : s.slice(1, 7); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); } return (s.match(/\d+(\.\d+)?/g) || [0, 0, 0]).slice(0, 3).map(Number); };
+const lum = (c) => { const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const INK_L = lum(rgbOf(INK));
+export function contrast(a, b) { const x = lum(rgbOf(a)), y = lum(rgbOf(b)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+export function inkOn(bg) {
+  let c = rgbOf(bg);
+  const dark = (lum(c) + 0.05) / (INK_L + 0.05);
+  if (dark >= 4.5) return { bg: `rgb(${c.join(",")})`, ink: INK, dark: true };
+  for (let i = 0; i < 40 && 1.05 / (lum(c) + 0.05) < 4.5; i++) c = c.map((v) => Math.round(v * 0.97));
+  return { bg: `rgb(${c.join(",")})`, ink: "#fff", dark: false };
+}
+
 export function domainPair(name, size = 14) {
   return (legendInfo(name).domains || []).map((d) => domainIcon(d, size)).join("");
 }
