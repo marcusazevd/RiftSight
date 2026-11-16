@@ -77,7 +77,25 @@ function bindHist() {
 }
 
 // ================= Mais =================
-let moreView = "menu", editDeck = null;
+let moreView = "menu", editDeck = null, editDeckOrig = "";
+// Abre o editor de deck e guarda uma foto do que está na tela, para saber depois se houve alteração.
+function openDeckEditor(d, show = renderMore) {
+  editDeck = d; moreView = "deck"; show();
+  collectDeck(); editDeckOrig = JSON.stringify(editDeck);
+}
+const deckDirty = () => { if (moreView !== "deck" || !editDeck) return false; collectDeck(); return JSON.stringify(editDeck) !== editDeckOrig; };
+// Botão voltar do Android: subtela volta um nível (editor › decks › menu). Editor com alterações pergunta antes.
+export function moreBack() {
+  if (moreView === "menu") return false;
+  if (moreView === "deck") {
+    const leave = () => { moreView = "decks"; editDeck = null; renderMore(); window.scrollTo(0, 0); };
+    if (deckDirty()) confirmBox("Descartar alterações?", "O deck tem alterações que ainda não foram salvas.", "Descartar", true).then((ok) => { if (ok) leave(); });
+    else leave();
+    return true;
+  }
+  moreView = "menu"; editDeck = null; renderMore(); window.scrollTo(0, 0);
+  return true;
+}
 async function offerFile(filename, text) {
   if (window.RBTAndroid) {
     try { const r = window.RBTAndroid.saveText(filename, text); if (r === "ok") { toast("Salvo em Downloads: " + filename); return true; } } catch (e) { console.warn(e); }
@@ -158,7 +176,7 @@ function renderMore() {
   }
   if (moreView === "decks") {
     const ds = st.decks.slice().sort((a, b) => (a.archived - b.archived) || a.name.localeCompare(b.name));
-    el.innerHTML = back + `<div class="card"><h2>Meus decks</h2>${ds.length ? ds.map((d) => {
+    el.innerHTML = back + `<div class="card"><h2>Meus decks</h2>${ds.length ? '<div class="list">' + ds.map((d) => {
       const ms = st.matches.filter((m) => m.deckId === d.id), r = record(ms), last = (d.versions || [])[d.versions.length - 1];
       return `<button class="li dkrow${d.archived ? " arch" : ""}" data-dk="${esc(d.id)}" type="button">${avatar(d.legend, 40)}<span class="dk-n"><b>${esc(d.name)}</b><span class="m">${esc(d.legend)} · ${last ? esc(last.name) : "sem versão"}${d.archived ? " · arquivado" : ""}</span></span><span class="m dk-r">${r.n ? r.w + "–" + r.l + (r.d ? "–" + r.d : "") : ""}</span><i aria-hidden="true">›</i></button>`;
     }).join("") + "</div>" : '<p class="m">Cadastre teus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
@@ -215,8 +233,8 @@ function bindMore() {
     }
     if (b.dataset.go) { moreView = b.dataset.go; editDeck = null; renderMore(); window.scrollTo(0, 0); return; }
     if (b.id === "go-journey") { const { startJourney } = await import("./onboard.js"); startJourney({ first: false }); return; }
-    if (b.id === "dk-new") { editDeck = { id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 }; moreView = "deck"; renderMore(); return; }
-    if (b.dataset.dk) { editDeck = JSON.parse(JSON.stringify(S.deck(b.dataset.dk))); moreView = "deck"; renderMore(); return; }
+    if (b.id === "dk-new") { openDeckEditor({ id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 }); return; }
+    if (b.dataset.dk) { const dk = S.deck(b.dataset.dk); if (dk) openDeckEditor(JSON.parse(JSON.stringify(dk))); return; }
     if (b.id === "dk-addv") { collectDeck(); editDeck.versions.push({ id: S.newKey("v"), name: "v" + (editDeck.versions.length + 1), note: "", createdAt: Date.now() }); renderMore(); return; }
     if (b.id === "dk-save") {
       collectDeck();
@@ -324,8 +342,7 @@ export async function importChooser() {
 }
 // Abre o editor com um deck novo (atalho da jornada de boas-vindas).
 export function newDeckFlow() {
-  editDeck = { id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 };
-  moreView = "deck"; showView("more", { keep: true });
+  openDeckEditor({ id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 }, () => showView("more", { keep: true }));
 }
 
 async function doImport(txt) {

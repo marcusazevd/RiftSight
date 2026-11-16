@@ -300,5 +300,10 @@ function bind() {
     if (tr) { muOpp = tr.dataset.mu; render(); window.scrollTo(0, 0); }
   });
 }
+// Botão voltar do Android: da página de um matchup volta para a matriz.
+export function statsBack() {
+  if (tab !== "matchups" || !muOpp) return false;
+  muOpp = null; render(); window.scrollTo(0, 0); return true;
+}
 registerView("stats", render);
 export function initAnalysis() { bind(); }

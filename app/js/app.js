@@ -4,10 +4,10 @@ import { record } from "./stats.js";
 import { $, $$, toast, RUNE, esc, dialog, setBadge } from "./ui.js";
 import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey, readLive } from "./core.js";
 import { initRegister, refreshAdd } from "./register.js";
-import { initLive } from "./live.js";
-import { initViews, refreshMore } from "./views.js";
+import { initLive, liveBack } from "./live.js";
+import { initViews, refreshMore, moreBack } from "./views.js";
 import { maybeStartJourney, journeyBack } from "./onboard.js";
-import { initAnalysis } from "./analysis.js";
+import { initAnalysis, statsBack } from "./analysis.js";
 
 const IC = {
   add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l9-9M14.5 3.5l6 6-7 7-6-6z"/><path d="M4 16l4 4"/></svg>',
@@ -141,7 +141,11 @@ function androidBridge() {
     if (bg) { bg.click(); return true; }
     const open = document.querySelector(".pl:not(.hide)"); if (open) { open.classList.add("hide"); return true; }
     const v = currentView();
-    if (v === "live") return false;
+    // contador: no setup volta para Registrar; em jogo fica como estava (o placar segue guardado)
+    if (v === "live") return liveBack();
+    // subtelas voltam um nível antes de sair da aba
+    if (v === "more" && moreBack()) return true;
+    if (v === "stats" && statsBack()) return true;
     if (v !== "add") { showView("add"); return true; }
     return false;
   };
