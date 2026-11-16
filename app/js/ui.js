@@ -29,7 +29,8 @@ export function legendInfo(name) {
 }
 export function legendColors(name) {
   const d = legendInfo(name).domains;
-  if (d && d.length === 2) return [DOMAINS[d[0]].color, DOMAINS[d[1]].color];
+  // domínio desconhecido (lenda importada de outra versão): cai nas cores neutras
+  if (d && d.length === 2 && DOMAINS[d[0]] && DOMAINS[d[1]]) return [DOMAINS[d[0]].color, DOMAINS[d[1]].color];
   return ["#8d7a52", "#4a4232"];
 }
 
@@ -44,7 +45,7 @@ export function avatar(name, size = 40) {
   if (!name) return `<span class="av emp" style="--s:${size}px">+</span>`;
   const [a, b] = legendColors(name);
   const img = getState().images[name];
-  if (img) return `<span class="av img" style="--s:${size}px;--a:${a};--b:${b}"><img src="${img}" alt="" draggable="false"></span>`;
+  if (img) return `<span class="av img" style="--s:${size}px;--a:${a};--b:${b}"><img src="${esc(img)}" alt="" draggable="false"></span>`;
   return `<span class="av" style="--s:${size}px;--a:${a};--b:${b}"><span>${esc(initials(name))}</span></span>`;
 }
 // Selo de set (C5): ícone pixelado próprio + sigla, na cor do set.
@@ -60,16 +61,17 @@ export function setInfo(id) {
   const s = allSets().find((x) => x.id === id) || DEFAULT_SETS.find((x) => x.id === id) || { id, name: id || "—" };
   const def = DEFAULT_SETS.find((x) => x.id === id);
   const n = [...String(id || "")].reduce((a, c) => a + c.charCodeAt(0), 0);
-  return { ...s, color: s.color || (def && def.color) || SET_PALETTE[n % SET_PALETTE.length], glyph: s.glyph || (def && def.glyph) || "gem" };
+  const color = typeof s.color === "string" && /^#[0-9a-fA-F]{3,8}$/.test(s.color) ? s.color : "";
+  return { ...s, name: String(s.name ?? id ?? "—"), color: color || (def && def.color) || SET_PALETTE[n % SET_PALETTE.length], glyph: s.glyph || (def && def.glyph) || "gem" };
 }
 export function setGlyph(id, size = 10) {
   const s = setInfo(id);
-  return `<svg width="${size}" height="${size}" viewBox="0 0 12 12" fill="${s.color}" shape-rendering="crispEdges" aria-hidden="true"><path d="${SET_GLYPH[s.glyph] || SET_GLYPH.gem}"/></svg>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 12 12" fill="${esc(s.color)}" shape-rendering="crispEdges" aria-hidden="true"><path d="${SET_GLYPH[s.glyph] || SET_GLYPH.gem}"/></svg>`;
 }
 export function setBadge(id, { full = false } = {}) {
   if (!id) return `<span class="setb" style="--sc:var(--mut)">—</span>`;
   const s = setInfo(id);
-  return `<span class="setb" style="--sc:${s.color}" title="${esc(s.name)}">${setGlyph(id)}${esc(full ? s.name : s.id)}</span>`;
+  return `<span class="setb" style="--sc:${esc(s.color)}" title="${esc(s.name)}">${setGlyph(id)}${esc(full ? s.name : s.id)}</span>`;
 }
 export function domainPair(name, size = 14) {
   return (legendInfo(name).domains || []).map((d) => domainIcon(d, size)).join("");

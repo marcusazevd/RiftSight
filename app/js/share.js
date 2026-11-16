@@ -58,7 +58,7 @@ async function avatar(ctx, name, x, y, s) {
   ctx.lineWidth = Math.max(4, s / 30); ctx.strokeStyle = "#000"; ctx.strokeRect(x, y, s, s);
 }
 function domainsBar(ctx, name, x, y, w) {
-  const d = legendInfo(name).domains || [];
+  const d = (legendInfo(name).domains || []).filter((k) => DOMAINS[k]);
   d.forEach((k, i) => { ctx.fillStyle = DOMAINS[k].color; ctx.fillRect(x + i * (w / 2 + 6), y, w / 2 - 6, 12); });
   return d.map((k) => DOMAINS[k].name).join(" · ");
 }

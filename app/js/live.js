@@ -1,14 +1,14 @@
 // Contador de pontos que vira partida registrada (M1) + tela ligada (M3).
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendColors, dialog, confirmBox, toast, RUNE } from "./ui.js";
-import { bfPicker, fmtClock, RES, prefs, savePrefs, fmtTime, knownBattlefields, resultFromGames, registerView, showView } from "./core.js";
+import { bfPicker, fmtClock, RES, prefs, savePrefs, fmtTime, knownBattlefields, resultFromGames, registerView, showView, readLive } from "./core.js";
 import { myLabel, pickerHTML, bindPickers, paintMatchup, versionField, newVersion, lastVersionId, versionName, nextRound, blankForm } from "./register.js";
 
 const LIVE_KEY = "rbt_live";
 const WIN = 8;
 let L = null;
 
-function load() { try { L = JSON.parse(localStorage.getItem(LIVE_KEY) || "null"); } catch (e) { L = null; } }
+function load() { L = readLive(); }
 // Devolve true se gravou; se o armazenamento estiver cheio, avisa (o placar só fica na memória).
 let persistWarn = 0;
 function persist() {

@@ -2,7 +2,7 @@
 import * as S from "./store.js";
 import { record } from "./stats.js";
 import { $, $$, toast, RUNE, esc, dialog, setBadge } from "./ui.js";
-import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey } from "./core.js";
+import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey, readLive } from "./core.js";
 import { initRegister, refreshAdd } from "./register.js";
 import { initLive } from "./live.js";
 import { initViews, refreshMore } from "./views.js";
@@ -75,10 +75,11 @@ function boot() {
   S.onError((msg) => toast(msg, null, 6000));
   renderHeader();
   // retoma o contador se havia partida em andamento
-  let live = null; try { live = JSON.parse(localStorage.getItem("rbt_live") || "null"); } catch (e) {}
+  const live = readLive();
   showView(live && live.phase === "play" ? "live" : "add");
   S.init();
   if (S.getState().corruptAt) setTimeout(() => dialog({ title: "Cópia local danificada", body: "<p>Os dados salvos neste aparelho estavam danificados e não puderam ser lidos. O conteúdo foi guardado à parte, sem ser apagado.</p><p class=\"m\">Importe teu último backup em Mais › Backup" + (window.RBTAndroid ? " (o app também guarda um backup automático em Downloads/Riftsight)" : "") + ".</p>" }), 600);
+  else if (S.getState().repairedAt) setTimeout(() => toast("Alguns dados salvos estavam danificados e foram deixados de fora. O original ficou guardado à parte; confira teu último backup em Mais › Backup.", null, 8000), 600);
   // Modo offline/instalável: só funciona fora do claude.ai (página própria ou APK).
   if (window.RBTAndroid) androidBridge();
   if (!S.getState().corruptAt) setTimeout(maybeStartJourney, 300);

@@ -81,7 +81,7 @@ function filtersBar(all) {
   const mine = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
   let h = "";
   if (mine.length > 1) h += `<div class="lgs"><button class="lg${FL.my ? "" : " on"}" data-lg=""><span class="av emp" style="--s:40px">★</span><span class="n">Todas</span><span class="c">${all.length} partidas</span></button>${mine.map((n) => `<button class="lg${FL.my === n ? " on" : ""}" data-lg="${esc(n)}">${avatar(n, 40)}<span class="n">${esc(n)}</span><span class="c">${cnt[n]} partidas</span></button>`).join("")}</div>`;
-  if (usedSets.length > 1) h += `<div class="setchips" role="group" aria-label="Filtrar por set"><button type="button" data-fset="" class="${FL.set ? "" : "on"}">Todos</button>${usedSets.map((id) => `<button type="button" data-fset="${esc(id)}" class="${FL.set === id ? "on" : ""}" style="--sc:${setInfo(id).color}">${setBadge(id, { full: true })}</button>`).join("")}</div>`;
+  if (usedSets.length > 1) h += `<div class="setchips" role="group" aria-label="Filtrar por set"><button type="button" data-fset="" class="${FL.set ? "" : "on"}">Todos</button>${usedSets.map((id) => `<button type="button" data-fset="${esc(id)}" class="${FL.set === id ? "on" : ""}" style="--sc:${esc(setInfo(id).color)}">${setBadge(id, { full: true })}</button>`).join("")}</div>`;
   h += `<div class="fl">${sel("f_ctx", "Todos os tipos", EVENT_TYPES, FL.ctx)}${tab === "geral" ? sel("f_ver", "Todas as versões", uniq((m) => m.version), FL.ver) + sel("f_opp", "Todos os oponentes", uniq((m) => m.opp), FL.opp) : ""}
     <select id="f_per" aria-label="Período">${[["", "Todo o período"], ["7", "Últimos 7 dias"], ["30", "Últimos 30 dias"], ["90", "Últimos 90 dias"]].map((o) => `<option value="${o[0]}"${o[0] === String(FL.per) ? " selected" : ""}>${o[1]}</option>`).join("")}</select>
     ${act ? '<button class="btn" id="f_clr" type="button">Limpar filtros</button>' : ""}</div>`;
@@ -189,7 +189,7 @@ function matchupPage(d, opp) {
   if (parts.length) h += `<div class="card"><h2>Detalhes</h2>${parts.map(([t, l]) => `<div class="pg">${t}</div>${rows(l)}`).join("")}${AXIS}</div>`;
   h += paceCard(ms, "Ritmo neste matchup");
   h += `<div class="card"><h2>Guia do matchup</h2>${notes.length ? notes.map((m) => `<div class="note"><span class="chip ${m.result}">${RES_SHORT[m.result]}</span><div><p>${esc(m.note)}</p><span class="m">${fmtDate(m.playedAt)} · ${esc(m.version || m.my)}</span></div></div>`).join("") : '<p class="m">As notas das partidas contra essa lenda aparecem aqui, reunidas.</p>'}</div>`;
-  h += `<div class="card"><h2>Partidas</h2>${ms.slice().reverse().map((m) => `<div class="st"><span class="chip ${m.result}">${RES_SHORT[m.result]}</span><div class="nm">${esc(m.version || m.my)}${m.score ? " · " + m.score.replace("-", "–") : ""}</div><span class="m">${fmtDate(m.playedAt)}</span></div>`).join("")}</div>`;
+  h += `<div class="card"><h2>Partidas</h2>${ms.slice().reverse().map((m) => `<div class="st"><span class="chip ${m.result}">${RES_SHORT[m.result]}</span><div class="nm">${esc(m.version || m.my)}${m.score ? " · " + esc(m.score.replace("-", "–")) : ""}</div><span class="m">${fmtDate(m.playedAt)}</span></div>`).join("")}</div>`;
   return h;
 }
 

@@ -10,7 +10,16 @@ export const RES_SHORT = { W: "V", L: "D", D: "E" };
 // preferências locais (último deck, tema…)
 const PKEY = "rbt_prefs";
 export let prefs = {};
-try { prefs = JSON.parse(localStorage.getItem(PKEY) || "{}"); } catch (e) { prefs = {}; }
+// Preferências ilegíveis ou de tipo errado (null, texto solto): guarda o original e segue com os padrões.
+(function loadPrefs() {
+  let raw = null; try { raw = localStorage.getItem(PKEY); } catch (e) {}
+  if (!raw) return;
+  let o; try { o = JSON.parse(raw); } catch (e) { o = undefined; }
+  if (!o || typeof o !== "object" || Array.isArray(o)) { if (S.stashCorrupt(PKEY, raw)) try { localStorage.removeItem(PKEY); } catch (e) {} return; }
+  for (const k of ["my", "ver", "ctx", "ctxOut", "fmt", "place", "theme"]) if (k in o && typeof o[k] !== "string") delete o[k];
+  if ("deckId" in o && o.deckId !== null && typeof o.deckId !== "string") delete o.deckId;
+  prefs = o;
+})();
 export function savePrefs() { try { localStorage.setItem(PKEY, JSON.stringify(prefs)); } catch (e) {} }
 export function applyTheme() {
   const t = prefs.theme || "auto";
@@ -59,6 +68,26 @@ export function bfPicker(id, value, options, used = [], max = 5) {
     const on = o === value, dis = !on && usedC.includes(o);
     return `<button type="button" class="bfc${on ? " on" : ""}" data-bfv="${e(o)}"${dis ? ' disabled title="Já usado neste match"' : ""}>${e(o)}</button>`;
   }).join("")}<button type="button" class="bfc new" data-bfsearch="1">🔍 Buscar</button></div>`;
+}
+// ---------- contador em andamento (rbt_live) ----------
+// Lê o estado guardado do contador. Formato errado (sem games, sem pontos…) é tratado como
+// dado danificado: o original fica guardado à parte e o contador recomeça do zero.
+const LIVE_KEY = "rbt_live", LIVE_PHASES = ["setup", "play", "between", "gameover", "summary"];
+function validLive(o) {
+  if (!o || typeof o !== "object" || Array.isArray(o) || !LIVE_PHASES.includes(o.phase)) return false;
+  if (typeof o.my !== "string" || typeof o.opp !== "string" || !Array.isArray(o.games)) return false;
+  if (o.phase === "setup") return true;
+  const okGame = (g) => g && typeof g === "object" && g.points && typeof g.points.me === "number" && typeof g.points.opp === "number" && Array.isArray(g.log) && typeof (g.passes || 0) === "number"
+    && (!g.time || (typeof g.time.me === "number" && typeof g.time.opp === "number"));
+  return o.games.length > 0 && o.games.every(okGame) && Number.isInteger(o.cur) && o.cur >= 0 && o.cur < o.games.length && !!o.my && !!o.opp;
+}
+export function readLive() {
+  let raw = null; try { raw = localStorage.getItem(LIVE_KEY); } catch (e) {}
+  if (!raw || raw === "null") return null;
+  let o; try { o = JSON.parse(raw); } catch (e) { o = undefined; }
+  if (validLive(o)) return o;
+  if (S.stashCorrupt(LIVE_KEY, raw)) try { localStorage.removeItem(LIVE_KEY); } catch (e) {}
+  return null;
 }
 export const fmtClock = (ms) => { const t = Math.max(0, Math.round(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); };
 

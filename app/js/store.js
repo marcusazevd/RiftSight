@@ -3,7 +3,7 @@
 // 2) cópia local (localStorage) sempre, para abrir rápido e funcionar sem o banco.
 // No APK, só o armazenamento local (trocável por outro adaptador).
 
-import { DEFAULT_SETS } from "./data.js";
+import { DEFAULT_SETS, DOMAINS } from "./data.js";
 
 export const SCHEMA = 2;
 const LKEY = "rbt_v2";
@@ -73,6 +73,99 @@ export function storageUsage() {
   return { used: n, limit: LOCAL_LIMIT, pct: Math.min(100, Math.round((n / LOCAL_LIMIT) * 100)) };
 }
 
+// ---------- validação por esquema ----------
+// Tudo que entra por importação, pelo banco ou pela cópia local passa por aqui: tipos errados
+// são consertados quando dá e o registro é descartado quando não dá (nunca quebra uma tela).
+export const ID_RE = /^[\w-]{1,64}$/;
+export const IMG_RE = /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+const COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const SCORE_RE = /^\d-\d$/;
+export const EVENT_STATUS = ["open", "closed"];
+const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+const str = (x, d = "") => (typeof x === "string" ? x : d);
+const strOrNull = (x) => (typeof x === "string" && x ? x : null);
+// Id sempre no formato ID_RE. Um id com outros caracteres é trocado, sempre do mesmo jeito
+// (assim os vínculos partida → deck → versão continuam batendo); sem id aproveitável, null.
+const idOrNull = (x) => {
+  if (typeof x !== "string" && typeof x !== "number") return null;
+  const s = String(x); if (ID_RE.test(s)) return s;
+  const fixed = s.replace(/[^\w-]/g, "_").slice(0, 64);
+  return /[A-Za-z0-9]/.test(fixed) ? fixed : null;
+};
+const num = (x, d = 0) => (typeof x === "number" && isFinite(x) ? x : d);
+const posInt = (x) => (typeof x === "number" && isFinite(x) && x >= 1 ? Math.floor(x) : null);
+export const validImage = (u) => typeof u === "string" && IMG_RE.test(u);
+
+// Guarda o conteúdo bruto de uma chave ilegível antes de qualquer gravação por cima.
+export function stashCorrupt(key, raw) {
+  try { localStorage.setItem(key + "_danificado_" + Date.now(), raw); return true; } catch (e) { return false; }
+}
+
+function cleanGame(g, i) {
+  if (!isObj(g)) return null;
+  const pts = isObj(g.points) && typeof g.points.me === "number" && typeof g.points.opp === "number" ? { me: g.points.me, opp: g.points.opp } : null;
+  const time = isObj(g.time) && typeof g.time.me === "number" && typeof g.time.opp === "number" ? { me: g.time.me, opp: g.time.opp } : null;
+  const out = { ...g, n: i + 1, first: g.first === "me" || g.first === "opp" ? g.first : null, result: ["W", "L", "D"].includes(g.result) ? g.result : null,
+    myBf: strOrNull(g.myBf), oppBf: strOrNull(g.oppBf), points: pts, log: Array.isArray(g.log) ? g.log.filter(isObj) : [] };
+  if ("time" in g) out.time = time;
+  if ("passes" in g) out.passes = num(g.passes);
+  return out;
+}
+function cleanEventRef(e) {
+  if (!isObj(e)) return { type: "Outro", eventId: null, round: null };
+  return { type: str(e.type) || "Outro", eventId: idOrNull(e.eventId), round: posInt(e.round) };
+}
+function cleanDeck(d) {
+  if (!isObj(d)) return null;
+  const id = idOrNull(d.id); if (!id) return null;
+  const legend = str(d.legend).trim();
+  const vs = (Array.isArray(d.versions) ? d.versions : []).filter((v) => isObj(v) && idOrNull(v.id))
+    .map((v, i) => ({ ...v, id: idOrNull(v.id), name: str(v.name).trim() || "v" + (i + 1), note: str(v.note), createdAt: num(v.createdAt) }));
+  const bfs = (Array.isArray(d.battlefields) ? d.battlefields : []).map((b) => str(b)).slice(0, 3);
+  while (bfs.length < 3) bfs.push("");
+  return { ...d, id, name: str(d.name).trim() || legend || "Deck sem nome", legend, battlefields: bfs, set: str(d.set).slice(0, 16), archived: !!d.archived,
+    versions: vs.length ? vs : [{ id: id.slice(0, 60) + "-v1", name: "v1", note: "", createdAt: num(d.createdAt) }],
+    createdAt: num(d.createdAt) || num(d.updatedAt) || 1, updatedAt: num(d.updatedAt) };
+}
+function cleanEvent(e) {
+  if (!isObj(e)) return null;
+  const id = idOrNull(e.id); if (!id) return null;
+  const date = num(e.date) || num(e.createdAt) || Date.now();
+  return { ...e, id, name: str(e.name).trim() || "Evento", type: str(e.type) || "Outro", place: str(e.place), date,
+    deckId: idOrNull(e.deckId), versionId: idOrNull(e.versionId), status: EVENT_STATUS.includes(e.status) ? e.status : "closed",
+    placement: typeof e.placement === "number" && isFinite(e.placement) ? e.placement : null, players: typeof e.players === "number" && isFinite(e.players) ? e.players : null,
+    topCut: !!e.topCut, note: str(e.note), createdAt: num(e.createdAt) || date, updatedAt: num(e.updatedAt) };
+}
+const CLEAN = { decks: cleanDeck, events: cleanEvent };
+// Lista de decks/eventos: devolve só os válidos (ids repetidos: fica o primeiro).
+export function cleanList(name, items) {
+  const seen = new Set(), out = [];
+  for (const it of Array.isArray(items) ? items : []) { const c = CLEAN[name](it); if (c && !seen.has(c.id)) { seen.add(c.id); out.push(c); } }
+  return out;
+}
+export function cleanSettings(s) {
+  const out = { sets: null, customLegends: {} };
+  if (!isObj(s)) return out;
+  if (isObj(s.customLegends)) for (const [name, l] of Object.entries(s.customLegends)) {
+    if (!name || !isObj(l)) continue;
+    const doms = (Array.isArray(l.domains) ? l.domains : []).filter((d) => typeof d === "string" && Object.prototype.hasOwnProperty.call(DOMAINS, d));
+    out.customLegends[name] = { name, domains: doms.length === 2 ? doms : [], set: strOrNull(l.set) };
+  }
+  if (Array.isArray(s.sets)) {
+    const seen = new Set();
+    const list = s.sets.filter((x) => isObj(x) && typeof x.id === "string" && x.id.trim() && x.id.length <= 16 && str(x.name).trim() && typeof x.start === "string" && DATE_RE.test(x.start) && !seen.has(x.id) && seen.add(x.id))
+      .map((x) => ({ id: x.id, name: x.name.trim(), start: x.start, ...(typeof x.color === "string" && COLOR_RE.test(x.color) ? { color: x.color } : {}), ...(typeof x.glyph === "string" && /^[a-z]{1,12}$/.test(x.glyph) ? { glyph: x.glyph } : {}) }));
+    out.sets = list.length ? list : null;
+  }
+  return out;
+}
+function cleanImages(o) {
+  const out = {};
+  if (isObj(o)) for (const [n, u] of Object.entries(o)) if (n && validImage(u)) out[n] = u;
+  return out;
+}
+
 function loadLocal() {
   try {
     const raw = localStorage.getItem(LKEY);
@@ -85,15 +178,25 @@ function loadLocal() {
       state.corruptAt = Date.now();
       return;
     }
-    state.matches = (o.matches || []).map(normalize).filter(Boolean);
-    state.settings = { ...state.settings, ...(o.settings || {}) };
-    state.pending = o.pending || {};
-    state.decks = o.decks || [];
-    state.events = o.events || [];
-    state.listsAt = { decks: 0, events: 0, ...(o.listsAt || {}) };
+    // JSON válido, mas com o formato errado (null, texto, listas que não são listas): mesma estratégia
+    const okList = (x) => x === undefined || Array.isArray(x), okObj = (x) => x === undefined || isObj(x);
+    let bad = !isObj(o) || !okList(o.matches) || !okList(o.decks) || !okList(o.events) || !okObj(o.settings) || !okObj(o.pending) || !okObj(o.listsAt);
+    if (!isObj(o)) o = {};
+    const ms = Array.isArray(o.matches) ? o.matches : [], ds = Array.isArray(o.decks) ? o.decks : [], es = Array.isArray(o.events) ? o.events : [];
+    state.matches = dedupe(ms.map(normalize).filter(Boolean));
+    state.settings = { ...state.settings, ...cleanSettings(o.settings) };
+    state.pending = {};
+    if (isObj(o.pending)) for (const [id, op] of Object.entries(o.pending)) if (op === "set" || op === "delete") state.pending[id] = op;
+    state.decks = cleanList("decks", ds);
+    state.events = cleanList("events", es);
+    state.listsAt = { decks: num(isObj(o.listsAt) ? o.listsAt.decks : 0), events: num(isObj(o.listsAt) ? o.listsAt.events : 0) };
     sortMatches();
-  } catch (e) { console.error(e); }
+    // algum registro gravado não passou na validação: o original fica guardado à parte
+    if (state.matches.length < ms.length || state.decks.length < ds.length || state.events.length < es.length) bad = true;
+    if (bad) { if (stashCorrupt(LKEY, raw)) saveLocal(); state.repairedAt = Date.now(); }
+  } catch (e) { console.warn(e); }
 }
+function dedupe(list) { const seen = new Set(); return list.filter((m) => !seen.has(m.id) && seen.add(m.id)); }
 
 export function sets() {
   const s = state.settings.sets && state.settings.sets.length ? state.settings.sets : DEFAULT_SETS;
@@ -114,13 +217,28 @@ export function newId() {
 
 // Aceita partidas v2 e converte qualquer formato parecido (importação).
 export function normalize(m) {
-  if (!m || typeof m !== "object") return null;
-  if (m.schema === SCHEMA && m.id && m.my && m.opp) {
-    if (!["W", "L", "D"].includes(m.result)) return null;
-    return { ...m, id: String(m.id), format: m.format === "bo3" ? "bo3" : "bo1", playedAt: +m.playedAt || +m.createdAt || Date.now(), games: Array.isArray(m.games) ? m.games : [], tags: m.tags || [], event: m.event || { type: "Outro", eventId: null, round: null } };
+  if (!isObj(m)) return null;
+  const name = (x) => (typeof x === "string" ? x.trim() : "");
+  if (m.schema === SCHEMA) {
+    const id = idOrNull(m.id), my = name(m.my), opp = name(m.opp);
+    if (!id || !my || !opp || !["W", "L", "D"].includes(m.result)) return null;
+    const format = m.format === "bo3" ? "bo3" : "bo1";
+    const playedAt = num(m.playedAt) || num(m.createdAt) || Date.now();
+    const games = (Array.isArray(m.games) ? m.games : []).map((g) => (isObj(g) ? g : null)).filter(Boolean).map(cleanGame);
+    // placar: "2-1"; se vier em outro formato, é recalculado pelos games
+    let sc = typeof m.score === "string" && SCORE_RE.test(m.score) ? m.score : "";
+    if (!sc && format === "bo3") { const w = games.filter((g) => g.result === "W").length, l = games.filter((g) => g.result === "L").length; sc = w + l ? w + "-" + l : ""; }
+    const out = { ...m, id, my, opp, format, playedAt, createdAt: num(m.createdAt) || playedAt, updatedAt: num(m.updatedAt), set: typeof m.set === "string" && m.set ? m.set.slice(0, 16) : setForDate(playedAt),
+      deckId: idOrNull(m.deckId), versionId: idOrNull(m.versionId), version: str(m.version), event: cleanEventRef(m.event), score: sc, games,
+      note: str(m.note), tags: Array.isArray(m.tags) ? m.tags.filter((t) => typeof t === "string") : [] };
+    if ("source" in m && typeof m.source !== "string") delete out.source;
+    if ("endedBy" in m && typeof m.endedBy !== "string") delete out.endedBy;
+    return out;
   }
   // formato do app antigo (v1)
-  if (m.my && m.opp && (m.r === "V" || m.r === "D")) {
+  if (name(m.my) && name(m.opp) && (m.r === "V" || m.r === "D")) {
+    m = { ...m, my: name(m.my), opp: name(m.opp), id: String(m.id ?? "").replace(/[^\w-]/g, "_").slice(0, 60) || Math.random().toString(36).slice(2, 8),
+      d: num(m.d), ver: str(m.ver), ctx: str(m.ctx), note: str(m.note), score: typeof m.score === "string" && SCORE_RE.test(m.score) ? m.score : "" };
     const playedAt = m.d || Date.now();
     const result = m.r === "V" ? "W" : "L";
     const first = m.turn === "Primeiro" ? "me" : m.turn === "Segundo" ? "opp" : null;
@@ -210,22 +328,29 @@ export async function deleteMatch(id) {
   return true;
 }
 
+// Devolve quantos itens (decks, eventos, imagens) foram ignorados por serem inválidos.
 export async function importLists(o) {
-  if (o && o.images && typeof o.images === "object") for (const [n, u] of Object.entries(o.images)) if (typeof u === "string" && u.startsWith("data:image/") && !state.images[n]) await saveImage(n, u);
+  let ignored = 0;
+  if (o && isObj(o.images)) for (const [n, u] of Object.entries(o.images)) {
+    if (!n || !validImage(u)) { ignored++; continue; }
+    if (!state.images[n]) await saveImage(n, u);
+  }
   for (const name of ["decks", "events"]) {
     if (!o || !Array.isArray(o[name])) continue;
     const list = state[name].slice();
-    for (const it of o[name]) {
-      if (!it || !it.id) continue;
+    for (const raw of o[name]) {
+      const it = CLEAN[name](raw);
+      if (!it) { ignored++; continue; }
       const i = list.findIndex((x) => x.id === it.id);
       if (i < 0) list.push(it); else if ((it.updatedAt || 0) > (list[i].updatedAt || 0)) list[i] = it;
     }
     await saveList(name, list);
   }
+  return ignored;
 }
 
 export async function importMatches(list, mode = "merge") {
-  const norm = list.map(normalize).filter(Boolean);
+  const norm = dedupe(list.map(normalize).filter(Boolean));
   let added = 0, updated = 0;
   for (const m of norm) {
     const i = state.matches.findIndex((x) => x.id === m.id);
@@ -280,7 +405,7 @@ export const evt = (id) => state.events.find((e) => e.id === id) || null;
 export const openEvent = () => state.events.filter((e) => e.status === "open").sort((a, b) => b.date - a.date)[0] || null;
 
 export async function saveSettings(patch) {
-  state.settings = { ...state.settings, ...patch };
+  state.settings = cleanSettings({ ...state.settings, ...patch });
   saveLocal(); emit();
   if (settingsDoc) {
     try { await settingsDoc.set(JSON.parse(JSON.stringify(state.settings))); } catch (e) { console.warn(e); }
@@ -296,9 +421,18 @@ export function legacyMatches() {
 }
 
 // ---------- inicialização ----------
-function loadImagesLocal() { try { state.images = JSON.parse(localStorage.getItem(IKEY) || "{}"); } catch (e) { state.images = {}; } }
+function loadImagesLocal() {
+  state.images = {};
+  let raw = null; try { raw = localStorage.getItem(IKEY); } catch (e) {}
+  if (!raw) return;
+  let o; try { o = JSON.parse(raw); } catch (e) { o = undefined; }
+  state.images = cleanImages(o);
+  // tipo errado ou imagem inválida: guarda o original e regrava só o que é válido
+  if (!isObj(o) || Object.keys(state.images).length < Object.keys(o).length) { if (stashCorrupt(IKEY, raw)) try { localStorage.setItem(IKEY, JSON.stringify(state.images)); } catch (e) {} }
+}
 function saveImagesLocal() { try { localStorage.setItem(IKEY, JSON.stringify(state.images)); return true; } catch (e) { emitError("Sem espaço no aparelho para mais imagens."); return false; } }
 export async function saveImage(name, dataUrl) {
+  if (dataUrl && !validImage(dataUrl)) return false;
   const prev = state.images[name];
   if (dataUrl) state.images[name] = dataUrl; else delete state.images[name];
   if (!durable(saveImagesLocal())) { if (prev) state.images[name] = prev; else delete state.images[name]; emit(); return false; }
@@ -333,7 +467,7 @@ export async function init() {
     try {
       const snapI = await imagesCol.get();
       const remote = {};
-      snapI.docs.forEach((d) => { const x = d.data(); if (x && x.name && x.data) remote[x.name] = x.data; });
+      snapI.docs.forEach((d) => { const x = d.data(); if (x && typeof x.name === "string" && x.name && validImage(x.data)) remote[x.name] = x.data; });
       for (const [n, u] of Object.entries(state.images)) {
         if (!remote[n]) { try { await imagesCol.doc(imgId(n)).set({ name: n, data: u, updatedAt: Date.now() }); } catch (e) { console.warn(e); } }
       }
@@ -342,14 +476,14 @@ export async function init() {
     } catch (e) { console.warn("imagens", e); }
 
     const s = await settingsDoc.get().catch(() => null);
-    if (s && s.exists) { state.settings = { ...state.settings, ...s.data() }; }
+    if (s && s.exists) { state.settings = cleanSettings({ ...state.settings, ...s.data() }); }
 
     for (const name of ["decks", "events"]) {
       listDocs[name] = db.doc("data/users/" + uid + "/" + name);
       const snap = await listDocs[name].get().catch(() => null);
       const remote = snap && snap.exists ? snap.data() : null;
       if (remote && (remote.updatedAt || 0) >= (state.listsAt[name] || 0)) {
-        state[name] = Array.isArray(remote.items) ? remote.items : [];
+        state[name] = cleanList(name, remote.items);
         state.listsAt[name] = remote.updatedAt || 0;
       } else if (state[name].length) {
         await saveList(name, state[name]);

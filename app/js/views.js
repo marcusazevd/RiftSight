@@ -23,9 +23,9 @@ function matchRow(m) {
   const first = g1 && g1.first ? (g1.first === "me" ? "começou jogando" : "começou em segundo") : "";
   const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null;
   const pts = m.format !== "bo3" && g1 && g1.points ? " " + g1.points.me + "–" + g1.points.opp : "";
-  return `<div class="hi ${m.result}">${avatar(m.opp, 36)}<div class="b"><b class="${m.result.toLowerCase()}">${RES[m.result].toUpperCase()}</b>${m.score ? " " + m.score.replace("-", "–") : pts} contra ${esc(m.opp)}
-    <div class="m">${setBadge(m.set)} com ${esc(m.my)}${m.version ? " (" + esc(m.version) + ")" : ""}<br>${ev ? esc(ev.name) + " · rodada " + (m.event.round || "?") : esc((m.event && m.event.type) || "")}${first ? ", " + first : ""} · ${fmtDate(m.playedAt)}${m.source === "contador" ? " · ⏱" : ""}${m.note ? "<br>" + esc(m.note) : ""}</div></div>
-    <button class="x" data-ed="${m.id}" aria-label="Editar partida">✎</button><button class="x" data-del="${m.id}" aria-label="Apagar partida">✕</button></div>`;
+  return `<div class="hi ${esc(m.result)}">${avatar(m.opp, 36)}<div class="b"><b class="${esc(m.result.toLowerCase())}">${RES[m.result].toUpperCase()}</b>${m.score ? " " + esc(m.score.replace("-", "–")) : esc(pts)} contra ${esc(m.opp)}
+    <div class="m">${setBadge(m.set)} com ${esc(m.my)}${m.version ? " (" + esc(m.version) + ")" : ""}<br>${ev ? esc(ev.name) + " · rodada " + esc(m.event.round || "?") : esc((m.event && m.event.type) || "")}${first ? ", " + first : ""} · ${fmtDate(m.playedAt)}${m.source === "contador" ? " · ⏱" : ""}${m.note ? "<br>" + esc(m.note) : ""}</div></div>
+    <button class="x" data-ed="${esc(m.id)}" aria-label="Editar partida">✎</button><button class="x" data-del="${esc(m.id)}" aria-label="Apagar partida">✕</button></div>`;
 }
 function renderHist() {
   const el = $("#hist"), ms = S.getState().matches, evs = S.getState().events.slice().sort((a, b) => b.date - a.date);
@@ -40,12 +40,12 @@ function renderHist() {
     }).join("")}</div>` : "";
     el.innerHTML = tabs + summary + `<div class="card"><h2>Eventos</h2>${evs.length ? evs.map((ev) => {
       const r = eventRecord(ev), dk = ev.deckId ? S.deck(ev.deckId) : null;
-      return `<div class="evr ${ev.status}"><div class="b"><span class="tag">${esc(ev.type)}</span><b>${esc(ev.name)}</b>${ev.status === "open" ? ' <span class="live-dot">em andamento</span>' : ""}
+      return `<div class="evr ${ev.status === "open" ? "open" : "closed"}"><div class="b"><span class="tag">${esc(ev.type)}</span><b>${esc(ev.name)}</b>${ev.status === "open" ? ' <span class="live-dot">em andamento</span>' : ""}
         <div class="m">${fmtDate(ev.date)}${ev.place ? " · " + esc(ev.place) : ""}${dk ? " · " + esc(dk.name) : ""}</div>
         <div class="evs"><b>${r.w}-${r.l}${r.d ? "-" + r.d : ""}</b>${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
-        ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${m.result}" title="Rodada ${m.event.round}: ${RES[m.result]} vs ${esc(m.opp)}">R${m.event.round || "?"} ${RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
+        ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${esc(m.result)}" title="Rodada ${esc(m.event.round || "?")}: ${RES[m.result]} vs ${esc(m.opp)}">R${esc(m.event.round || "?")} ${RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
         ${ev.note ? `<div class="m">${esc(ev.note)}</div>` : ""}</div>
-        <div class="evbtns">${r.n ? `<button class="x" data-evshare="${ev.id}" aria-label="Card para compartilhar" title="Card para compartilhar">⇪</button>` : ""}${ev.status === "open" ? `<button class="btn" data-evclose="${ev.id}" type="button">Encerrar</button>` : `<button class="x" data-evdel="${ev.id}" aria-label="Apagar evento">✕</button>`}</div></div>`;
+        <div class="evbtns">${r.n ? `<button class="x" data-evshare="${esc(ev.id)}" aria-label="Card para compartilhar" title="Card para compartilhar">⇪</button>` : ""}${ev.status === "open" ? `<button class="btn" data-evclose="${esc(ev.id)}" type="button">Encerrar</button>` : `<button class="x" data-evdel="${esc(ev.id)}" aria-label="Apagar evento">✕</button>`}</div></div>`;
     }).join("") : '<p class="m">Nenhum evento ainda. Comece um na tela Registrar.</p>'}
     ${S.openEvent() ? "" : '<button class="btn pri" id="ev-new" type="button" style="margin-top:12px">Começar evento</button>'}</div>`;
     return;
@@ -278,7 +278,7 @@ async function imageEditor(name) {
   };
   const v = await dialog({
     title: name,
-    body: `<div class="imged"><div class="imgprev">${cur ? `<img src="${cur}" alt="">` : ""}<canvas id="ie-cv" width="200" height="200"${cur ? ' class="hide"' : ""}></canvas></div>
+    body: `<div class="imged"><div class="imgprev">${cur ? `<img src="${esc(cur)}" alt="">` : ""}<canvas id="ie-cv" width="200" height="200"${cur ? ' class="hide"' : ""}></canvas></div>
       <label class="btn full filebtn">Escolher imagem<input id="ie-file" type="file" accept="image/*"></label>
       <div id="ie-adj" class="hide"><label for="ie-z">Zoom</label><input id="ie-z" type="range" min="1" max="3" step="0.02" value="1">
       <label for="ie-x">Horizontal</label><input id="ie-x" type="range" min="-1" max="1" step="0.02" value="0">
@@ -333,10 +333,11 @@ async function doImport(txt) {
   try { o = JSON.parse(txt); } catch (e) { await dialog({ title: "Arquivo inválido", body: "<p>Não consegui ler esse backup. Confira se é o arquivo .json exportado pelo app.</p>" }); return; }
   const list = Array.isArray(o) ? o : o && Array.isArray(o.matches) ? o.matches : null;
   if (!list) { await dialog({ title: "Arquivo inválido", body: "<p>Esse arquivo não tem partidas.</p>" }); return; }
-  const ok = await confirmBox("Importar backup?", `${list.length} partida${list.length !== 1 ? "s" : ""} no arquivo${o.decks ? ", " + o.decks.length + " deck(s)" : ""}${o.events ? ", " + o.events.length + " evento(s)" : ""}. O que é novo entra; o repetido fica com a versão mais recente.`, "Importar");
+  const ok = await confirmBox("Importar backup?", `${list.length} partida${list.length !== 1 ? "s" : ""} no arquivo${Array.isArray(o.decks) ? ", " + o.decks.length + " deck(s)" : ""}${Array.isArray(o.events) ? ", " + o.events.length + " evento(s)" : ""}. O que é novo entra; o repetido fica com a versão mais recente.`, "Importar");
   if (!ok) return;
-  if (!Array.isArray(o)) await S.importLists(o);
+  const badLists = Array.isArray(o) ? 0 : await S.importLists(o);
   const r = await S.importMatches(list);
+  r.ignored += badLists; // decks, eventos e imagens inválidos também contam como ignorados
   const cur = S.getState().settings, inc = (o && o.settings) || {};
   const patch = {};
   if (inc.customLegends && typeof inc.customLegends === "object") patch.customLegends = { ...inc.customLegends, ...(cur.customLegends || {}) };

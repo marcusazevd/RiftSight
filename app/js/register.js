@@ -3,7 +3,7 @@ import { DOMAINS, LEGENDS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendInfo, legendColors, dialog, confirmBox, promptBox, toast, RUNE } from "./ui.js";
 import { backupBanner, handleBackupBanner } from "./views.js";
-import { bfPicker, RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownBattlefields, resultFromGames, eventRecord, registerView, showView } from "./core.js";
+import { bfPicker, RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownBattlefields, resultFromGames, eventRecord, registerView, showView, readLive } from "./core.js";
 
 let F;
 export function blankForm() {
@@ -41,7 +41,7 @@ export function legendOptions() {
 function deckOptions() {
   const ds = S.getState().decks.filter((d) => !d.archived);
   if (!ds.length) return "";
-  return `<div class="pg">Meus decks</div>${ds.map((d) => `<div class="po" tabindex="-1" data-deck="${d.id}" data-n="${esc(d.name + " " + d.legend)}">${avatar(d.legend, 30)}<span class="nm">${esc(d.name)}<span class="st" style="display:block">${esc(d.legend)}</span></span><span class="doms">${domainPair(d.legend, 13)}</span></div>`).join("")}<div class="pg">Só a lenda</div>`;
+  return `<div class="pg">Meus decks</div>${ds.map((d) => `<div class="po" tabindex="-1" data-deck="${esc(d.id)}" data-n="${esc(d.name + " " + d.legend)}">${avatar(d.legend, 30)}<span class="nm">${esc(d.name)}<span class="st" style="display:block">${esc(d.legend)}</span></span><span class="doms">${domainPair(d.legend, 13)}</span></div>`).join("")}<div class="pg">Só a lenda</div>`;
 }
 export const myLabel = (dk) => (dk ? "Seu deck" : S.getState().decks.some((d) => !d.archived) ? "Seu deck ou lenda" : "Sua lenda");
 export function pickerHTML(side, value, label, withDecks, deckId = null) {
@@ -110,7 +110,7 @@ export function bindPickers(root, onPick) {
 export function versionField(id, deckId, versionId, verText, listId) {
   const dk = deckId ? S.deck(deckId) : null;
   if (dk) {
-    return `<select id="${id}">${(dk.versions || []).slice().reverse().map((v) => `<option value="${v.id}"${v.id === versionId ? " selected" : ""}>${esc(v.name)}${v.note ? " — " + esc(v.note) : ""}</option>`).join("")}<option value="__new">＋ Nova versão…</option></select>`;
+    return `<select id="${id}">${(dk.versions || []).slice().reverse().map((v) => `<option value="${esc(v.id)}"${v.id === versionId ? " selected" : ""}>${esc(v.name)}${v.note ? " — " + esc(v.note) : ""}</option>`).join("")}<option value="__new">＋ Nova versão…</option></select>`;
   }
   const versions = [...new Set(S.getState().matches.map((m) => m.version).filter(Boolean))].sort();
   return `<input id="${id}" list="${listId}" placeholder="Ex.: v2, mais agressivo" value="${esc(verText)}" autocomplete="off"><datalist id="${listId}">${versions.map((v) => `<option value="${esc(v)}">`).join("")}</datalist>`;
@@ -137,7 +137,7 @@ export async function startEvent() {
       <div class="row"><div><label for="et">Tipo</label><select id="et">${EVENT_TYPES.map((t) => `<option${t === (prefs.ctx || "Nexus Night") ? " selected" : ""}>${t}</option>`).join("")}</select></div>
       <div><label for="ed">Data</label><input id="ed" type="date" value="${toLocalDate(Date.now())}"></div></div>
       <label for="ep">Loja / local</label><input id="ep" value="${esc(prefs.place || "")}">
-      ${ds.length ? `<label for="ek">Deck</label><select id="ek"><option value="">—</option>${ds.map((d) => `<option value="${d.id}"${d.id === F.deckId ? " selected" : ""}>${esc(d.name)}</option>`).join("")}</select>` : ""}`,
+      ${ds.length ? `<label for="ek">Deck</label><select id="ek"><option value="">—</option>${ds.map((d) => `<option value="${esc(d.id)}"${d.id === F.deckId ? " selected" : ""}>${esc(d.name)}</option>`).join("")}</select>` : ""}`,
     actions: [{ label: "Cancelar", value: null }, { label: "Começar", primary: true, value: (r) => ({ name: $("#en", r).value.trim(), type: $("#et", r).value, date: $("#ed", r).value, place: $("#ep", r).value.trim(), deckId: $("#ek", r) ? $("#ek", r).value : "" }) }],
   });
   if (!v) return null;
@@ -174,7 +174,7 @@ function eventBanner() {
   const ev = S.openEvent();
   if (!ev) return "";
   const r = eventRecord(ev);
-  return `<div class="evbar"><div><span class="tag">EVENTO EM ANDAMENTO</span><br><b>${esc(ev.name)}</b> <span class="m">· ${esc(ev.type)}</span><div class="m">Rodada ${nextRound(ev.id)} · ${r.w}-${r.l}${r.d ? "-" + r.d : ""}${ev.place ? " · " + esc(ev.place) : ""}</div></div><button class="btn" type="button" id="ev-close">Encerrar</button></div>`;
+  return `<div class="evbar"><div><span class="tag">EVENTO EM ANDAMENTO</span><br><b>${esc(ev.name)}</b> <span class="m">· ${esc(ev.type)}</span><div class="m">Rodada ${esc(nextRound(ev.id))} · ${r.w}-${r.l}${r.d ? "-" + r.d : ""}${ev.place ? " · " + esc(ev.place) : ""}</div></div><button class="btn" type="button" id="ev-close">Encerrar</button></div>`;
 }
 
 // faixa de status: recorde, últimas 5 e sequência
@@ -219,7 +219,7 @@ function render() {
   const ev = F.eventId ? S.evt(F.eventId) : null;
   const bfs = knownBattlefields();
   const mine = dk ? (dk.battlefields || []).filter(Boolean) : bfs;
-  let liveOn = false; try { const lv = JSON.parse(localStorage.getItem("rbt_live") || "null"); liveOn = !!(lv && lv.phase && lv.phase !== "setup"); } catch (e) {}
+  const lv = readLive(), liveOn = !!(lv && lv.phase !== "setup");
   el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}
   ${F.editId ? "" : `<div class="herorow"><button class="go big-go" id="go-live" type="button"><span>NOVA PARTIDA<small>Contador de pontos${F.eventId && S.evt(F.eventId) ? " · rodada " + nextRound(F.eventId) : ""}</small></span></button>${S.openEvent() ? "" : `<button class="evchip" type="button" id="ev-start"><b>＋</b>EVENTO</button>`}</div>
   <button class="manual-t${F.manual ? " open" : ""}" id="f-manual" type="button" aria-expanded="${!!F.manual}"><span>Registrar partida já jogada</span><i>${F.manual ? "▴" : "▾"}</i></button>`}
@@ -235,8 +235,8 @@ function render() {
     <button type="button" class="more-t" id="f-more" aria-expanded="${F.details}">${F.details ? "Menos detalhes ▴" : "Mais detalhes ▾"} <span class="m">${esc(ev ? ev.name + " · rodada " + (F.round || nextRound(ev.id)) : F.ctx)} · ${esc(S.sets().find((s) => s.id === F.set)?.name || "")} · ${fmtDate(fromLocalInput(F.date))}</span></button>
     <div class="${F.details ? "" : "hide"}">
       ${ev ? "" : `<label for="f-ctx">Tipo de jogo</label><select id="f-ctx">${EVENT_TYPES.map((c) => `<option${c === F.ctx ? " selected" : ""}>${c}</option>`).join("")}</select>`}
-      <div class="row"><div><label for="f-date">Data</label><input id="f-date" type="datetime-local" value="${F.date}"></div>
-      <div><label for="f-set">Set</label><select id="f-set">${S.sets().map((s) => `<option value="${s.id}"${s.id === F.set ? " selected" : ""}>${esc(s.name)}</option>`).join("")}</select></div></div>
+      <div class="row"><div><label for="f-date">Data</label><input id="f-date" type="datetime-local" value="${esc(F.date)}"></div>
+      <div><label for="f-set">Set</label><select id="f-set">${S.sets().map((s) => `<option value="${esc(s.id)}"${s.id === F.set ? " selected" : ""}>${esc(s.name)}</option>`).join("")}</select></div></div>
       <label for="f-note">Notas</label><textarea id="f-note" rows="2" placeholder="O que funcionou e o que deu errado">${esc(F.note)}</textarea>
     </div>
     <button class="go" id="f-save" type="button">${F.editId ? "ATUALIZAR PARTIDA" : "SALVAR"}</button>
