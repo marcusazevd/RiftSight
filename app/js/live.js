@@ -226,10 +226,12 @@ function renderBetween() {
     <button class="btn full" id="lv-timeb" type="button" style="margin-top:10px">Encerrar por tempo</button></div>`;
 }
 
+// aviso de "desfeito" no topo do resumo (no fluxo da página, sem cobrir botões)
+let undoMsg = "";
 function renderSummary() {
   const el = $("#live"), ms = matchScore(), dk = L.deckId ? S.deck(L.deckId) : null, ev = L.eventId ? S.evt(L.eventId) : null;
   const mins = (g) => (g.endedAt && g.startedAt ? Math.max(1, Math.round((g.endedAt - g.startedAt) / 60000)) + " min" : "");
-  el.innerHTML = `<div class="card gold"><h2>Resultado da partida</h2>
+  el.innerHTML = `${undoMsg ? `<div class="svbar info" role="status"><span class="sv-t">${esc(undoMsg)}</span></div>` : ""}<div class="card gold"><h2>Resultado da partida</h2>
     <div class="mu"><div class="pick">${avatar(L.my, 56)}<span class="pt">${esc(dk ? dk.name : L.my)}</span></div><div class="vs">VS</div><div class="pick">${avatar(L.opp, 56)}<span class="pt">${esc(L.opp)}</span></div></div>
     <div class="seg c3" id="lv-res" role="group" aria-label="Resultado">${["W", "L", "D"].map((k) => `<button type="button" class="${k} ${L.result === k ? "on" : ""}" data-r="${k}">${RES[k]}</button>`).join("")}</div>
     ${L.fmt === "bo3" ? `<p class="score">Placar: <b>${ms.w}–${ms.l}</b></p>` : ""}
@@ -282,11 +284,22 @@ async function saveLive() {
   let ok = false;
   try { ok = await S.saveMatch(m); } finally { saving = false; }
   if (!ok) { await dialog({ title: "Não foi possível salvar", body: "<p>O aparelho está sem espaço. A partida continua aqui no contador: faça um backup, remova fotos de lendas em Mais e tente salvar de novo.</p>" }); return; }
-  L = null; persist(); wake(false);
-  // em evento, o próximo passo é a rodada seguinte: volta para Registrar com o banner atualizado
-  if (ev && ev.status === "open") { showView("add"); savedToast(m); return; }
+  const snap = JSON.stringify(L);
+  L = null; undoMsg = ""; persist(); wake(false);
+  // em evento, o próximo passo é a rodada seguinte: volta para Registrar com o banner atualizado.
+  // Desfazer devolve a partida ao resumo do contador (como estava antes de salvar).
+  if (ev && ev.status === "open") { showView("add"); savedToast(m, () => restoreSummary(snap)); return; }
   toast(({ W: "Vitória registrada", L: "Derrota registrada", D: "Empate registrado" })[m.result] + " contra " + m.opp);
   showView("hist");
+}
+// Desfazer depois de salvar: volta ao resumo do contador. Se outra partida já está em andamento no
+// contador, não sobrescreve (devolve false e a partida vai para o formulário manual preenchido).
+function restoreSummary(snap) {
+  const cur = readLive();
+  if (cur && cur.phase !== "setup") return false;
+  try { localStorage.setItem(LIVE_KEY, snap); } catch (e) { return false; }
+  L = null; undoMsg = "Desfeito: a partida voltou para o resumo. Corrija e salve de novo."; showView("live");
+  return "live";
 }
 // Botão voltar do Android: no setup (antes de começar) volta para Registrar; com partida em jogo não trata.
 export function liveBack() {
@@ -375,7 +388,7 @@ function bind() {
     if (b.id === "lv-timeb") return byTime();
     if (b.dataset.r && b.closest("#lv-res")) { L.result = b.dataset.r; $$("#lv-res button").forEach((x) => x.classList.toggle("on", x === b)); persist(); return; }
     if (b.id === "lv-save") return saveLive();
-    if (b.id === "lv-discard" && (await confirmBox("Descartar partida?", "Nada será salvo.", "Descartar", true))) { L = null; persist(); showView("add"); }
+    if (b.id === "lv-discard" && (await confirmBox("Descartar partida?", "Nada será salvo.", "Descartar", true))) { L = null; undoMsg = ""; persist(); showView("add"); }
   });
   el.addEventListener("change", async (e) => {
     if (e.target.id === "lv-ver" && e.target.value === "__new") { collectSetup(); const id = await newVersion(L.deckId); if (id) L.versionId = id; persist(); renderSetup(); }

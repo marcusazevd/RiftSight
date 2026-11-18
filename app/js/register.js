@@ -3,7 +3,7 @@ import { DOMAINS, LEGENDS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendInfo, legendColors, dialog, confirmBox, promptBox, toast, RUNE } from "./ui.js";
 import { backupBanner, handleBackupBanner } from "./views.js";
-import { bfPicker, RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownMyBattlefields, knownOppBattlefields, resultFromGames, eventRecord, registerView, showView, readLive } from "./core.js";
+import { bfPicker, RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownMyBattlefields, knownOppBattlefields, resultFromGames, eventRecord, registerView, showView, currentView, readLive } from "./core.js";
 
 let F;
 export function blankForm() {
@@ -235,7 +235,7 @@ function render() {
   const dk = F.deckId ? S.deck(F.deckId) : null;
   const ev = F.eventId ? S.evt(F.eventId) : null;
   const lv = readLive(), liveOn = !!(lv && lv.phase !== "setup");
-  el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}
+  el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}${savedStrip()}
   ${F.editId ? "" : `<div class="herorow"><button class="go big-go" id="go-live" type="button"><span>NOVA PARTIDA<small>Contador de pontos${F.eventId && S.evt(F.eventId) ? " · rodada " + nextRound(F.eventId) : ""}</small></span></button>${S.openEvent() ? "" : `<button class="evchip" type="button" id="ev-start"><b>＋</b>EVENTO</button>`}</div>
   <button class="manual-t${F.manual ? " open" : ""}" id="f-manual" type="button" aria-expanded="${!!F.manual}"><span>Registrar partida já jogada</span><i>${F.manual ? "▴" : "▾"}</i></button>`}
   <div class="card mcard${F.editId || F.manual ? "" : " hide"}">
@@ -320,6 +320,7 @@ function bind() {
     if (b.id === "f-manual") { collect(); F.manual = !F.manual; prefs.manual = F.manual ? 1 : 0; savePrefs(); render(); return; }
     if (b.id === "f-more") { collect(); F.details = !F.details; render(); return; }
     if (b.id === "f-save") return save();
+    if (b.id === "sv-undo") return undoSaved();
     if (b.id === "f-cancel") { F = blankForm(); render(); showView("hist"); }
   });
   el.addEventListener("change", async (e) => {
@@ -394,25 +395,66 @@ async function save() {
   try { ok = await S.saveMatch(m); } finally { saving = false; }
   if (!ok) { await dialog({ title: "Não foi possível salvar", body: "<p>O aparelho está sem espaço. O formulário continua preenchido: faça um backup, remova fotos de lendas em Mais e tente de novo.</p>" }); return; }
   const wasEdit = !!old;
+  // foto do formulário como estava ao salvar: o Desfazer devolve exatamente isto
+  const snap = JSON.parse(JSON.stringify(F));
   // formulário novo, com "Mais detalhes" fechado: a próxima rodada começa limpa
   F = { ...blankForm(), manual: F.manual, details: false };
-  render();
-  if (wasEdit) { toast("Partida atualizada"); showView("hist"); return; }
+  if (wasEdit) { render(); toast("Partida atualizada"); showView("hist"); return; }
+  savedToast(m, () => { F = { ...snap, _fresh: false }; return true; });
   window.scrollTo(0, 0); // de volta ao topo: banner do evento e recorde à vista
-  savedToast(m);
+}
+
+// ---------- aviso "salvo" com Desfazer ----------
+// Faixa no fluxo da página, logo abaixo do banner do evento (onde o olhar está depois de voltar ao topo).
+// Não é flutuante: não fica por cima de nenhum controle do formulário e o texto não deixa o toque passar
+// para o que está embaixo. O Desfazer vale por UNDO_MS; depois a faixa fica só como confirmação (sem botão)
+// até a próxima partida ou até sair da tela.
+export const UNDO_MS = 8000;
+let SV = null, svT = null, svSeq = 0;
+function savedStrip() {
+  if (!SV || F.editId) return "";
+  const can = SV.id && Date.now() < SV.until;
+  return `<div class="svbar${SV.info ? " info" : ""}" id="svbar" role="status"><span class="sv-t">${SV.html}</span>${can ? '<button type="button" id="sv-undo">Desfazer</button>' : SV.info ? "" : '<span class="sv-ok" aria-hidden="true">✓</span>'}</div>`;
+}
+function paintStrip() {
+  const el = document.getElementById("svbar"), html = savedStrip();
+  if (el) { if (html) el.outerHTML = html; else el.remove(); }
 }
 // Aviso depois de salvar: rodada, resultado, placar, oponente e recorde do evento, com Desfazer.
-// Ex.: "R3 · Vitória 2–1 vs Kai'Sa · evento 2–1". Desfazer apaga a partida recém-salva.
-export function savedToast(m) {
+// Ex.: "R3 · Vitória 2–1 vs Kai'Sa · evento 2–1". Desfazer apaga a partida recém-salva e devolve os dados:
+// restore() refaz o estado de antes (formulário preenchido ou resumo do contador) e devolve false se não deu.
+export function savedToast(m, restore = null) {
   const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null, g1 = m.games && m.games[0];
   const sc = m.score ? m.score.replace("-", "–") : m.format !== "bo3" && g1 && g1.points ? g1.points.me + "–" + g1.points.opp : "";
-  let msg = (ev && m.event.round ? "R" + m.event.round + " · " : "") + RES[m.result] + (sc ? " " + sc : "") + " vs " + m.opp;
-  if (ev) { const r = eventRecord(ev); msg += ` · evento ${r.w}–${r.l}${r.d ? "–" + r.d : ""}`; }
-  toast(msg, { label: "Desfazer", fn: async () => { if (await S.deleteMatch(m.id)) toast("Registro desfeito: a partida foi apagada"); } }, 8000);
+  let html = esc((ev && m.event.round ? "R" + m.event.round + " · " : "") + RES[m.result] + (sc ? " " + sc : "") + " vs " + m.opp);
+  if (ev) { const r = eventRecord(ev); html += ` · <span class="nw">evento ${r.w}–${r.l}${r.d ? "–" + r.d : ""}</span>`; }
+  const seq = ++svSeq;
+  SV = { seq, id: m.id, m, html, until: Date.now() + UNDO_MS, restore };
+  clearTimeout(svT); svT = setTimeout(() => { if (SV && SV.seq === seq) paintStrip(); }, UNDO_MS + 30);
+  if (currentView() === "add") render();
+}
+async function undoSaved() {
+  const sv = SV;
+  // só vale para o aviso que está na tela, dentro do prazo
+  if (!sv || !sv.id || Date.now() >= sv.until || !document.getElementById("sv-undo")) return;
+  SV = null; clearTimeout(svT);
+  if (!(await S.deleteMatch(sv.id))) { SV = sv; paintStrip(); toast("Não consegui desfazer: o aparelho está sem espaço"); return; }
+  const back = sv.restore ? sv.restore() : false;
+  if (back === "live") return; // voltou para o resumo do contador
+  if (!back) F = { ...formFromMatch(sv.m), editId: null, manual: true, details: true };
+  F.manual = true; prefs.manual = 1; savePrefs();
+  SV = { seq: ++svSeq, id: null, info: true, html: "Desfeito: a partida voltou para o formulário. Corrija e salve de novo." };
+  render();
+  window.scrollTo(0, 0);
 }
 
 export function editMatch(id) {
   const m = S.getState().matches.find((x) => x.id === id); if (!m) return;
+  F = formFromMatch(m);
+  showView("add");
+}
+// Formulário preenchido com uma partida (editar, ou devolver ao formulário depois do Desfazer).
+function formFromMatch(m) {
   const gs = [0, 1, 2].map((i) => { const g = m.games[i] || {}; return { first: g.first || "", result: g.result || "", myBf: g.myBf || "", oppBf: g.oppBf || "" }; });
   // Bo3 antigo só com placar: reconstrói resultados na ordem V… D…
   if (m.format === "bo3" && !m.games.some((g) => g.result) && m.score) {
@@ -422,12 +464,11 @@ export function editMatch(id) {
   }
   const wins = m.games.filter((g) => g.result === "W").length, losses = m.games.filter((g) => g.result === "L").length;
   const byTime = m.format === "bo3" && (m.endedBy === "time" || m.source === "contador") && wins < 2 && losses < 2 && !(m.result === "D" && wins === 1 && losses === 1);
-  F = { ...blankForm(), editId: m.id, deckId: m.deckId || null, versionId: m.versionId || null, my: m.my, opp: m.opp, ver: m.deckId && S.deck(m.deckId) ? "" : m.version || "",
+  return { ...blankForm(), editId: m.id, deckId: m.deckId || null, versionId: m.versionId || null, my: m.my, opp: m.opp, ver: m.deckId && S.deck(m.deckId) ? "" : m.version || "",
     timeResult: byTime ? m.result : null, timeGames: m.games.length, dateTouched: true, _fresh: true,
     ctx: (m.event && m.event.type) || "Outro", eventId: (m.event && m.event.eventId) || null, round: (m.event && m.event.round) || null, turn: (m.games[0] && m.games[0].first) || "",
     note: m.note || "", fmt: m.format, result: m.format === "bo1" ? m.result : "", myBf: (m.games[0] && m.games[0].myBf) || "", oppBf: (m.games[0] && m.games[0].oppBf) || "",
     games: gs, timeDraw: m.format === "bo3" && m.result === "D", date: toLocalInput(m.playedAt), set: m.set, setTouched: true, details: true };
-  showView("add");
 }
 
 // Formulário intocado: refaz os padrões (deck, evento) com os dados mais recentes.
@@ -438,5 +479,5 @@ export function refreshAdd() {
   // não redesenha se um seletor de lenda estiver aberto
   if (!document.querySelector("#add .pl:not(.hide)")) render();
 }
-registerView("add", () => { collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) { F.eventId = null; F.ctx = freeCtx(); } } render(); });
+registerView("add", () => { if (SV && !(SV.id && Date.now() < SV.until)) SV = null; collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) { F.eventId = null; F.ctx = freeCtx(); } } render(); });
 export function initRegister() { bind(); }
