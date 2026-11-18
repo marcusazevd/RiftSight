@@ -5,7 +5,7 @@ import { $, $$, toast, RUNE, esc, dialog, setBadge } from "./ui.js";
 import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey, readLive } from "./core.js";
 import { initRegister, refreshAdd } from "./register.js";
 import { initLive, liveBack } from "./live.js";
-import { initViews, refreshMore, moreBack } from "./views.js";
+import { initViews, refreshMore, moreBack, leaveDeckEditor } from "./views.js";
 import { maybeStartJourney, journeyBack } from "./onboard.js";
 import { initAnalysis, statsBack } from "./analysis.js";
 
@@ -42,7 +42,8 @@ function boot() {
   <nav aria-label="Navegação">
     <button data-t="add" class="on">${IC.add}Registrar</button><button data-t="stats">${IC.stats}Estatísticas</button>
     <button data-t="hist">${IC.hist}Histórico</button><button data-t="more">${IC.more}Mais</button></nav>`);
-  $$("nav button").forEach((b) => (b.onclick = () => showView(b.dataset.t)));
+  // sair do editor de deck pelas abas também pergunta quando há alteração não salva
+  $$("nav button").forEach((b) => (b.onclick = async () => { if (currentView() === "more" && !(await leaveDeckEditor())) return; showView(b.dataset.t); }));
   initRegister(); initLive(); initViews(); initAnalysis();
   // seletor de battlefield (botões): escolhe, desmarca ou adiciona outro
   document.addEventListener("click", async (e) => {

@@ -84,6 +84,14 @@ function openDeckEditor(d, show = renderMore) {
   collectDeck(); editDeckOrig = JSON.stringify(editDeck);
 }
 const deckDirty = () => { if (moreView !== "deck" || !editDeck) return false; collectDeck(); return JSON.stringify(editDeck) !== editDeckOrig; };
+// Saída do editor por outro caminho (abas da barra inferior): com alteração não salva, pergunta antes.
+// Devolve true se pode sair (sem alteração, ou o jogador escolheu descartar).
+export async function leaveDeckEditor() {
+  if (!deckDirty()) return true;
+  const ok = await confirmBox("Descartar alterações?", "O deck tem alterações que ainda não foram salvas.", "Descartar", true);
+  if (ok) { moreView = "decks"; editDeck = null; }
+  return ok;
+}
 // Botão voltar do Android: subtela volta um nível (editor › decks › menu). Editor com alterações pergunta antes.
 export function moreBack() {
   if (moreView === "menu") return false;
@@ -231,6 +239,8 @@ function bindMore() {
       if (t) { prefs.theme = t; savePrefs(); applyTheme(); renderMore(); }
       return;
     }
+    // "‹ Decks" no editor: mesma regra do voltar do Android (alteração não salva pergunta antes)
+    if (b.dataset.go && moreView === "deck") { moreBack(); return; }
     if (b.dataset.go) { moreView = b.dataset.go; editDeck = null; renderMore(); window.scrollTo(0, 0); return; }
     if (b.id === "go-journey") { const { startJourney } = await import("./onboard.js"); startJourney({ first: false }); return; }
     if (b.id === "dk-new") { openDeckEditor({ id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 }); return; }
