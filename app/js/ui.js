@@ -130,17 +130,26 @@ export const promptBox = (title, label, value = "") =>
     onOpen: (r) => r.querySelector("#dlg-in").addEventListener("keydown", (e) => { if (e.key === "Enter") r.querySelector(".btn.pri").click(); }),
   });
 
-let toastT;
-export function toast(msg, action = null, ms = 2200) {
+// Aviso flutuante. Com ação (Desfazer, Card), a duração pedida é respeitada; ao esconder, o botão sai do DOM
+// e um clique atrasado (aviso já escondido ou trocado por outro) é ignorado.
+let toastT, toastSeq = 0;
+export function toast(msg, action = null, ms = null) {
   let t = document.getElementById("toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+  const seq = ++toastSeq;
   t.textContent = msg;
   t.classList.toggle("act", !!action);
   if (action) {
     const b = document.createElement("button"); b.type = "button"; b.textContent = action.label;
-    b.onclick = () => { t.classList.remove("on"); clearTimeout(toastT); action.fn(); };
+    b.onclick = () => { if (seq !== toastSeq || !t.classList.contains("on")) return; hide(); action.fn(); };
     t.appendChild(b);
   }
+  // some na hora para o toque (CSS: só #toast.on button recebe toque); o botão sai do DOM depois do fade
+  const hide = () => {
+    if (seq !== toastSeq) return;
+    t.classList.remove("on"); clearTimeout(toastT);
+    setTimeout(() => { if (seq !== toastSeq) return; const b = t.querySelector("button"); if (b) b.remove(); t.classList.remove("act"); }, 250);
+  };
   t.classList.add("on");
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), action ? 6000 : ms);
+  clearTimeout(toastT); toastT = setTimeout(hide, ms || (action ? 6000 : 2200));
 }

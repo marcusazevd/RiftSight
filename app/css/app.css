@@ -309,7 +309,16 @@ body.board-on main{max-width:none;padding:0}
 .evbar .btns{flex:none}
 /* aviso com ação (Desfazer): numa linha só quando couber, e só o botão recebe toque, para não travar o que está embaixo */
 #toast.act{pointer-events:none;display:flex;align-items:center;gap:12px;width:max-content;max-width:calc(100vw - 24px)}
-#toast button{background:none;border:0;color:var(--gold2);font:700 14px var(--f-b);cursor:pointer;padding:10px 8px;margin:-6px -4px;pointer-events:auto;flex:none}
+#toast button{background:none;border:0;color:var(--gold2);font:700 14px var(--f-b);cursor:pointer;padding:10px 8px;margin:-6px -4px;pointer-events:none;flex:none}
+#toast.on button{pointer-events:auto}
+/* aviso "salvo" com Desfazer: faixa no fluxo da página (abaixo do banner do evento), nunca por cima do formulário */
+.svbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:46px;padding:6px 8px 6px 14px;margin:3px 3px 15px;
+  background:var(--sf);box-shadow:0 0 0 3px var(--gold);font:600 15px var(--f-b);color:var(--tx)}
+.svbar .sv-t{flex:1;min-width:0}
+.svbar .nw{white-space:nowrap}
+.svbar button{flex:none;background:none;border:0;color:var(--gold2);font:700 14px var(--f-b);cursor:pointer;padding:10px 10px;min-height:40px}
+.svbar .sv-ok{flex:none;width:40px;text-align:center;color:var(--win);font-weight:700}
+.svbar.info{box-shadow:0 0 0 3px var(--bd);font-size:14px}
 .st .nm .m{white-space:normal}
 
 /* ===== imagens das lendas ===== */
