@@ -195,10 +195,10 @@ function myBfOptions() { const dk = F.deckId ? S.deck(F.deckId) : null; const ow
 // Bo3: os games valem em ordem, sem buraco, e o match acaba quando alguém chega a 2.
 // Devolve os games que contam (até a decisão) e se há game marcado depois de um em branco.
 function bo3Games() {
-  const used = []; let w = 0, l = 0, gap = false, hole = false;
-  for (const g of F.games) {
-    if (!g.result) { gap = true; continue; }
-    if (gap) { hole = true; break; }
+  const used = []; let w = 0, l = 0, gap = -1, hole = null;
+  for (const [i, g] of F.games.entries()) {
+    if (!g.result) { if (gap < 0) gap = i; continue; }
+    if (gap >= 0) { hole = { blank: gap + 1, marked: i + 1 }; break; } // ex.: Game 1 em branco e Game 2 marcado
     if (w === 2 || l === 2) break;
     used.push(g); if (g.result === "W") w++; else if (g.result === "L") l++;
   }
@@ -210,7 +210,8 @@ function gamesHTML() {
   const rows = [];
   const g = F.games;
   const split = !!(g[0].result && g[1].result && g[0].result !== g[1].result);
-  const showG3 = !F.timeDraw && split; // game 3 só existe com 1–1
+  // game 3 só existe com 1–1; continua à vista enquanto guardar um resultado (ex.: G1 desmarcado por engano)
+  const showG3 = !F.timeDraw && (split || !!g[2].result);
   const n = showG3 ? 3 : 2;
   for (let i = 0; i < n; i++) {
     const x = g[i];
@@ -305,11 +306,11 @@ function bind() {
       if (b.dataset.f) g.first = g.first === b.dataset.f ? "" : b.dataset.f;
       if (b.dataset.gr) {
         g.result = g.result === b.dataset.gr ? "" : b.dataset.gr;
-        // desmarcou um game: os seguintes deixam de valer (não existe game 3 sem game 2)
-        if (!g.result) F.games.slice(i + 1).forEach(clearGame);
-        // sem 1–1 não há game 3
+        // Desmarcar um game (toque duplo, comum com pressa) não apaga os seguintes: eles ficam à vista e o
+        // salvar explica qual game falta. O game 3 só é limpo quando deixa de existir (2–0, ou G1 e G2 em branco).
         const [a, c] = F.games;
-        if (!(a.result && c.result && a.result !== c.result)) { clearGame(F.games[2]); F.timeDraw = false; }
+        if ((a.result && c.result && a.result === c.result) || (!a.result && !c.result)) clearGame(F.games[2]);
+        if (!(a.result && c.result && a.result !== c.result)) F.timeDraw = false;
         // no Bo3, quem perdeu o game escolhe; sugestão: o perdedor começa o próximo
         const nx = F.games[i + 1];
         if (nx && !nx.first && g.result && (i === 0 || (a.result && c.result && a.result !== c.result))) nx.first = g.result === "L" ? "me" : "opp";
@@ -345,8 +346,8 @@ async function save() {
     if (!bo3 && !F.result) miss.push("o resultado: vitória, derrota ou empate");
     if (bo3 && !F.timeResult) {
       const b3 = bo3Games(), r0 = resultFromGames(b3.used);
-      if (b3.hole) miss.push("os games em ordem: há um game em branco antes de outro já marcado");
-      else if (!(r0.w === 2 || r0.l === 2 || (F.timeDraw && r0.w === 1 && r0.l === 1))) miss.push("quem ganhou cada game, até alguém fazer 2 (ou empate por tempo no 1–1)");
+      if (b3.hole) { await dialog({ title: "Games fora de ordem", body: `<p>Os games valem em ordem: o <b>Game ${b3.hole.blank}</b> está em branco, mas o <b>Game ${b3.hole.marked}</b> já foi marcado.</p><p>Marque o Game ${b3.hole.blank} ou desmarque o Game ${b3.hole.marked}.</p>` }); return; }
+      if (!(r0.w === 2 || r0.l === 2 || (F.timeDraw && r0.w === 1 && r0.l === 1))) miss.push("quem ganhou cada game, até alguém fazer 2 (ou empate por tempo no 1–1)");
     }
     if (miss.length) { await dialog({ title: "Falta pouco", body: "<p>Para salvar, falta marcar:</p><ul class=\"miss\">" + miss.map((x) => "<li>" + x + "</li>").join("") + "</ul>" }); return; }
   }

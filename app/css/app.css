@@ -163,7 +163,7 @@ nav button.on{color:var(--gold);background:var(--glow)}
   clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c))}
 #dlg .sheet h3{color:var(--gold);margin-bottom:8px}
 #dlg .dlg-body p{margin:6px 0}
-.dlg-act{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.dlg-act{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:18px} /* em 320 px os 4 botões do menu ⋯ quebram linha em vez de sair da tela */
 #toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:90;
   background:var(--sf2);border:1px solid var(--gold);color:var(--tx);padding:10px 16px;font-weight:600;transition:.2s;
   clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,8px 100%,0 50%)}
