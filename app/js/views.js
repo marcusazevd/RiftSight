@@ -362,8 +362,12 @@ async function doImport(txt) {
   if (!list) { await dialog({ title: "Arquivo inválido", body: "<p>Esse arquivo não tem partidas.</p>" }); return; }
   const ok = await confirmBox("Importar backup?", `${list.length} partida${list.length !== 1 ? "s" : ""} no arquivo${Array.isArray(o.decks) ? ", " + o.decks.length + " deck(s)" : ""}${Array.isArray(o.events) ? ", " + o.events.length + " evento(s)" : ""}. O que é novo entra; o repetido fica com a versão mais recente.`, "Importar");
   if (!ok) return;
-  const badLists = Array.isArray(o) ? 0 : await S.importLists(o);
-  const r = await S.importMatches(list);
+  S.prepareImport(o, list);
+  let r, badLists = 0;
+  try {
+    badLists = Array.isArray(o) ? 0 : await S.importLists(o);
+    r = await S.importMatches(list);
+  } finally { r = r || { added: 0, updated: 0, ignored: 0, repeated: 0, ok: false }; r.renamed = S.finishImport(); }
   r.ignored += badLists; // decks, eventos e imagens inválidos também contam como ignorados
   const cur = S.getState().settings, inc = (o && o.settings) || {};
   const patch = {};
@@ -371,7 +375,9 @@ async function doImport(txt) {
   if (Array.isArray(inc.sets) && inc.sets.length) { const mine = cur.sets && cur.sets.length ? cur.sets : null; patch.sets = mine ? [...mine, ...inc.sets.filter((s) => s && s.id && !mine.some((x) => x.id === s.id))] : inc.sets; }
   if (Object.keys(patch).length) await S.saveSettings(patch);
   if (!r.ok) { await dialog({ title: "Importação incompleta", body: "<p>O aparelho ficou sem espaço e as partidas não foram salvas. Remova fotos de lendas em Mais e tente de novo.</p>" }); return; }
-  toast(`${r.added} nova${r.added !== 1 ? "s" : ""}, ${r.updated} atualizada${r.updated !== 1 ? "s" : ""}${r.ignored ? `, ${r.ignored} ignorada${r.ignored !== 1 ? "s" : ""} (inválidas)` : ""}`, null, 5000);
+  // id trocado não é registro inválido: entra normalmente e só é contado à parte
+  const pl = (n, a, b) => n + " " + (n !== 1 ? b : a);
+  toast(`${pl(r.added, "nova", "novas")}, ${pl(r.updated, "atualizada", "atualizadas")}${r.ignored ? `, ${pl(r.ignored, "ignorada (inválida)", "ignoradas (inválidas)")}` : ""}${r.repeated ? `, ${pl(r.repeated, "repetida no arquivo", "repetidas no arquivo")}` : ""}${r.renamed ? ` · ${pl(r.renamed, "id ajustado", "ids ajustados")}` : ""}`, null, 6000);
 }
 async function addSet() {
   const v = await dialog({

@@ -85,14 +85,41 @@ export const EVENT_STATUS = ["open", "closed"];
 const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
 const str = (x, d = "") => (typeof x === "string" ? x : d);
 const strOrNull = (x) => (typeof x === "string" && x ? x : null);
-// Id sempre no formato ID_RE. Um id com outros caracteres é trocado, sempre do mesmo jeito
-// (assim os vínculos partida → deck → versão continuam batendo); sem id aproveitável, null.
+// Id sempre no formato ID_RE. Um id com outros caracteres (ou longo demais) ganha um id derivado
+// único e estável: o começo legível + "_" + hash curto do id original inteiro. O mesmo original vira
+// sempre o mesmo id (os vínculos partida → deck → versão → evento continuam batendo) e originais
+// diferentes não se fundem ("a b", "a.b" e "a_b" continuam 3 registros). Durante uma importação, o id
+// derivado também é conferido contra os ids que já existem e os demais do arquivo (ID_TAKEN).
+const ID_MAP = new Map();      // original → derivado (vale para a sessão inteira)
+let ID_TAKEN = null;           // ids em uso, só durante uma importação
+let ID_RENAMED = null;         // originais trocados nesta importação (para a mensagem)
+const hash36 = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36).padStart(7, "0"); };
+function deriveId(s) {
+  if (ID_MAP.has(s)) { const d = ID_MAP.get(s); if (ID_RENAMED) ID_RENAMED.add(s); return d; }
+  const head = s.replace(/[^\w-]/g, "_").slice(0, 56) || "id";
+  let d = head + "_" + hash36(s);
+  for (let k = 1; ID_TAKEN && ID_TAKEN.has(d) && k < 50; k++) d = head + "_" + hash36(s + "#" + k);
+  ID_MAP.set(s, d); if (ID_TAKEN) ID_TAKEN.add(d); if (ID_RENAMED) ID_RENAMED.add(s);
+  return d;
+}
 const idOrNull = (x) => {
   if (typeof x !== "string" && typeof x !== "number") return null;
-  const s = String(x); if (ID_RE.test(s)) return s;
-  const fixed = s.replace(/[^\w-]/g, "_").slice(0, 64);
-  return /[A-Za-z0-9]/.test(fixed) ? fixed : null;
+  const s = String(x); if (!s) return null;
+  return ID_RE.test(s) ? s : deriveId(s);
 };
+// Começa o controle de ids de uma importação: reserva os ids válidos já em uso (no aparelho e no arquivo).
+function beginIdScope(o, list) {
+  const taken = new Set(), add = (x) => { if ((typeof x === "string" || typeof x === "number") && ID_RE.test(String(x))) taken.add(String(x)); };
+  for (const m of state.matches) add(m.id);
+  for (const n of ["decks", "events"]) for (const it of state[n]) { add(it.id); if (n === "decks") for (const v of it.versions || []) add(v.id); }
+  for (const ID of ID_MAP.values()) taken.add(ID);
+  for (const m of Array.isArray(list) ? list : []) if (isObj(m)) add(m.id);
+  if (isObj(o)) for (const n of ["decks", "events"]) for (const it of Array.isArray(o[n]) ? o[n] : []) if (isObj(it)) { add(it.id); if (Array.isArray(it.versions)) it.versions.forEach((v) => isObj(v) && add(v.id)); }
+  ID_TAKEN = taken; ID_RENAMED = new Set();
+}
+export function prepareImport(o, list) { beginIdScope(o, list); }
+// Fecha o controle e devolve quantos ids originais foram trocados.
+export function finishImport() { const n = ID_RENAMED ? ID_RENAMED.size : 0; ID_TAKEN = null; ID_RENAMED = null; return n; }
 const num = (x, d = 0) => (typeof x === "number" && isFinite(x) ? x : d);
 const posInt = (x) => (typeof x === "number" && isFinite(x) && x >= 1 ? Math.floor(x) : null);
 export const validImage = (u) => typeof u === "string" && IMG_RE.test(u);
@@ -120,8 +147,10 @@ function cleanDeck(d) {
   if (!isObj(d)) return null;
   const id = idOrNull(d.id); if (!id) return null;
   const legend = str(d.legend).trim();
+  const vseen = new Set();
   const vs = (Array.isArray(d.versions) ? d.versions : []).filter((v) => isObj(v) && idOrNull(v.id))
-    .map((v, i) => ({ ...v, id: idOrNull(v.id), name: str(v.name).trim() || "v" + (i + 1), note: str(v.note), createdAt: num(v.createdAt) }));
+    .map((v, i) => ({ ...v, id: idOrNull(v.id), name: str(v.name).trim() || "v" + (i + 1), note: str(v.note), createdAt: num(v.createdAt) }))
+    .filter((v) => !vseen.has(v.id) && vseen.add(v.id));
   const bfs = (Array.isArray(d.battlefields) ? d.battlefields : []).map((b) => str(b)).slice(0, 3);
   while (bfs.length < 3) bfs.push("");
   return { ...d, id, name: str(d.name).trim() || legend || "Deck sem nome", legend, battlefields: bfs, set: str(d.set).slice(0, 16), archived: !!d.archived,
@@ -237,14 +266,14 @@ export function normalize(m) {
   }
   // formato do app antigo (v1)
   if (name(m.my) && name(m.opp) && (m.r === "V" || m.r === "D")) {
-    m = { ...m, my: name(m.my), opp: name(m.opp), id: String(m.id ?? "").replace(/[^\w-]/g, "_").slice(0, 60) || Math.random().toString(36).slice(2, 8),
+    m = { ...m, my: name(m.my), opp: name(m.opp), id: String(m.id ?? "") || Math.random().toString(36).slice(2, 8),
       d: num(m.d), ver: str(m.ver), ctx: str(m.ctx), note: str(m.note), score: typeof m.score === "string" && SCORE_RE.test(m.score) ? m.score : "" };
     const playedAt = m.d || Date.now();
     const result = m.r === "V" ? "W" : "L";
     const first = m.turn === "Primeiro" ? "me" : m.turn === "Segundo" ? "opp" : null;
     const bo3 = m.fmt === "bo3";
     return {
-      id: "v1-" + m.id, schema: SCHEMA, createdAt: playedAt, updatedAt: playedAt, playedAt,
+      id: idOrNull("v1-" + m.id), schema: SCHEMA, // id fora do padrão: derivado único (sem fundir partidas) createdAt: playedAt, updatedAt: playedAt, playedAt,
       set: setForDate(playedAt), my: m.my, opp: m.opp, deckId: null, version: m.ver || "",
       event: { type: m.ctx || "Outro", eventId: null, round: null },
       format: bo3 ? "bo3" : "bo1", result,
@@ -350,7 +379,7 @@ export async function importLists(o) {
 }
 
 export async function importMatches(list, mode = "merge") {
-  const norm = dedupe(list.map(normalize).filter(Boolean));
+  const valid = list.map(normalize).filter(Boolean), norm = dedupe(valid);
   let added = 0, updated = 0;
   for (const m of norm) {
     const i = state.matches.findIndex((x) => x.id === m.id);
@@ -362,7 +391,8 @@ export async function importMatches(list, mode = "merge") {
   sortMatches();
   const ok = durable(saveLocal()); emit();
   for (const id of Object.keys(state.pending)) await writeRemote(id);
-  return { added, updated, ignored: list.length - norm.length, ok };
+  // inválidas: não deu para aproveitar; repetidas: o mesmo id duas vezes no arquivo (fica a primeira)
+  return { added, updated, ignored: list.length - valid.length, repeated: valid.length - norm.length, ok };
 }
 
 // Versão renomeada: as partidas dela passam a usar o nome novo (senão as estatísticas se dividem).
