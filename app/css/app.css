@@ -677,7 +677,9 @@ button.tile{cursor:pointer}
 .dchips button{font:400 16px var(--f-b);padding:6px 10px;border:2px solid var(--bd);background:var(--btn);color:var(--mut);cursor:pointer;min-height:36px}
 .dchips button.on{border-color:var(--gold);color:var(--gold)}
 .srow .m b{font-weight:400}.srow .m b.c{color:#e2483d}.srow .m b.h{color:#9b59d6}
+/* listras de "poucos dados": claras sob texto escuro e escuras sob texto branco, para a listra só aumentar o contraste */
 .mx td.few{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.14) 0 3px,transparent 3px 8px)!important}
+.mx td.few.lt{background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.2) 0 3px,transparent 3px 8px)!important}
 .mx td{color:#120c22}.mx td.na{color:var(--mut)}
 .scale{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px}.scale span{display:flex;flex:1;height:10px}.scale span i{flex:1}
 .vr{display:grid;grid-template-columns:44px 1fr 50px;gap:8px;align-items:center;margin-top:8px}
