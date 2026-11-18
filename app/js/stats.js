@@ -151,10 +151,11 @@ export function matchupWeights(list) {
   });
 }
 // O que mais pesa contra: frequente e com taxa suavizada baixa (mínimo de 2 partidas).
+// Só concorre quem está abaixo de 50%: um matchup frequente em 54% não esconde um perdedor em 25%.
 export function hardestMatchup(list) {
   let best = null;
-  for (const x of matchupWeights(list)) { if (x.n < 2) continue; if (!best || x.risk > best.risk) best = x; }
-  return best && best.p < 0.5 ? best : null;
+  for (const x of matchupWeights(list)) { if (x.n < 2 || !(x.p < 0.5)) continue; if (!best || x.risk > best.risk) best = x; }
+  return best;
 }
 // O que mais pesa a favor. Prefere matchups com 5+ partidas; sem nenhum, devolve o melhor com a marca few ("poucos dados").
 export function bestMatchup(list) {
