@@ -2,7 +2,7 @@
 import * as S from "./store.js";
 import { record } from "./stats.js";
 import { $, $$, toast, RUNE, esc, dialog, setBadge } from "./ui.js";
-import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey, readLive } from "./core.js";
+import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey, readLive, liveLost } from "./core.js";
 import { initRegister, refreshAdd } from "./register.js";
 import { initLive, liveBack } from "./live.js";
 import { initViews, refreshMore, moreBack, leaveDeckEditor } from "./views.js";
@@ -80,11 +80,27 @@ function boot() {
   showView(live && live.phase === "play" ? "live" : "add");
   S.init();
   if (S.getState().corruptAt) setTimeout(() => dialog({ title: "Cópia local danificada", body: "<p>Os dados salvos neste aparelho estavam danificados e não puderam ser lidos. O conteúdo foi guardado à parte, sem ser apagado.</p><p class=\"m\">Importe teu último backup em Mais › Backup" + (window.RBTAndroid ? " (o app também guarda um backup automático em Downloads/Riftsight)" : "") + ".</p>" }), 600);
-  else if (S.getState().repairedAt) setTimeout(() => toast("Alguns dados salvos estavam danificados e foram deixados de fora. O original ficou guardado à parte; confira teu último backup em Mais › Backup.", null, 8000), 600);
+  else { const msg = repairNote(); if (msg) setTimeout(() => toast(msg, null, 10000), 600); }
   // Modo offline/instalável: só funciona fora do claude.ai (página própria ou APK).
   if (window.RBTAndroid) androidBridge();
   if (!S.getState().corruptAt) setTimeout(maybeStartJourney, 300);
   try { if (!window.RBTAndroid && "serviceWorker" in navigator && window.top === window && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {}); } catch (e) {}
+}
+// Aviso de dados reparados ao abrir: diz o que ficou de fora (e quanto entrou) e que há cópia do original.
+function repairNote() {
+  const st = S.getState(), parts = [];
+  const pl = (n, a, b) => n + " " + (n !== 1 ? b : a);
+  if (st.repairedAt && st.repaired) {
+    const [mk, mt] = st.repaired.matches, [dk, dt] = st.repaired.decks, [ek, et] = st.repaired.events;
+    if (mt > mk) parts.push(`${pl(mt - mk, "partida danificada ficou", "partidas danificadas ficaram")} de fora (${mk} de ${mt} carregadas).`);
+    if (dt > dk) parts.push(`${pl(dt - dk, "deck danificado ficou", "decks danificados ficaram")} de fora.`);
+    if (et > ek) parts.push(`${pl(et - ek, "evento danificado ficou", "eventos danificados ficaram")} de fora.`);
+    if (!parts.length) parts.push(`Parte dos dados salvos estava em formato errado e foi consertada (${pl(mk, "partida", "partidas")} carregada${mk !== 1 ? "s" : ""}).`);
+  }
+  if (st.imagesDropped) parts.push(st.imagesDropped > 0 ? `${pl(st.imagesDropped, "imagem de lenda inválida foi ignorada", "imagens de lenda inválidas foram ignoradas")}.` : "As imagens das lendas estavam danificadas e foram ignoradas.");
+  if (liveLost()) parts.push("A partida em andamento no contador estava danificada e não pôde ser recuperada.");
+  if (!parts.length) return "";
+  return parts.join(" ") + " Uma cópia do original ficou guardada neste aparelho; confira teu último backup em Mais › Backup.";
 }
 // Busca de battlefield: lista todos (catálogo + digitados), filtra ao digitar, permite nome novo.
 async function bfSearch(current, used) {

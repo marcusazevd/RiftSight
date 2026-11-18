@@ -96,12 +96,15 @@ function validLive(o) {
     && (!g.time || (typeof g.time.me === "number" && typeof g.time.opp === "number"));
   return o.games.length > 0 && o.games.every(okGame) && Number.isInteger(o.cur) && o.cur >= 0 && o.cur < o.games.length && !!o.my && !!o.opp;
 }
+let liveLostAt = 0;
+export const liveLost = () => liveLostAt;
 export function readLive() {
   let raw = null; try { raw = localStorage.getItem(LIVE_KEY); } catch (e) {}
   if (!raw || raw === "null") return null;
   let o; try { o = JSON.parse(raw); } catch (e) { o = undefined; }
   if (validLive(o)) return o;
   if (S.stashCorrupt(LIVE_KEY, raw)) try { localStorage.removeItem(LIVE_KEY); } catch (e) {}
+  liveLostAt = Date.now(); // o aviso de dados reparados conta que o placar em andamento se perdeu
   return null;
 }
 export const fmtClock = (ms) => { const t = Math.max(0, Math.round(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); };

@@ -222,7 +222,12 @@ function loadLocal() {
     sortMatches();
     // algum registro gravado não passou na validação: o original fica guardado à parte
     if (state.matches.length < ms.length || state.decks.length < ds.length || state.events.length < es.length) bad = true;
-    if (bad) { if (stashCorrupt(LKEY, raw)) saveLocal(); state.repairedAt = Date.now(); }
+    if (bad) {
+      if (stashCorrupt(LKEY, raw)) saveLocal();
+      state.repairedAt = Date.now();
+      // o que entrou e o que ficou de fora, para o aviso dizer exatamente o que aconteceu
+      state.repaired = { matches: [state.matches.length, ms.length], decks: [state.decks.length, ds.length], events: [state.events.length, es.length] };
+    }
   } catch (e) { console.warn(e); }
 }
 function dedupe(list) { const seen = new Set(); return list.filter((m) => !seen.has(m.id) && seen.add(m.id)); }
@@ -458,7 +463,10 @@ function loadImagesLocal() {
   let o; try { o = JSON.parse(raw); } catch (e) { o = undefined; }
   state.images = cleanImages(o);
   // tipo errado ou imagem inválida: guarda o original e regrava só o que é válido
-  if (!isObj(o) || Object.keys(state.images).length < Object.keys(o).length) { if (stashCorrupt(IKEY, raw)) try { localStorage.setItem(IKEY, JSON.stringify(state.images)); } catch (e) {} }
+  if (!isObj(o) || Object.keys(state.images).length < Object.keys(o).length) {
+    if (stashCorrupt(IKEY, raw)) try { localStorage.setItem(IKEY, JSON.stringify(state.images)); } catch (e) {}
+    state.imagesDropped = isObj(o) ? Object.keys(o).length - Object.keys(state.images).length : -1;
+  }
 }
 function saveImagesLocal() { try { localStorage.setItem(IKEY, JSON.stringify(state.images)); return true; } catch (e) { emitError("Sem espaço no aparelho para mais imagens."); return false; } }
 export async function saveImage(name, dataUrl) {

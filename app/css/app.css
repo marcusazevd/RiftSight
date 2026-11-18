@@ -168,6 +168,7 @@ nav button.on{color:var(--gold);background:var(--glow)}
   background:var(--sf2);border:1px solid var(--gold);color:var(--tx);padding:10px 16px;font-weight:600;transition:.2s;
   clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 50%,calc(100% - 8px) 100%,8px 100%,0 50%)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
+#toast{width:max-content;max-width:calc(100vw - 32px)} /* aviso longo usa a largura da tela, em vez de uma coluna estreita */
 @keyframes fade{from{opacity:0}}
 @keyframes pop{from{opacity:0;transform:translate(-50%,-46%) scale(.97)}}
 
