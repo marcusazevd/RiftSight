@@ -226,6 +226,7 @@ function versoes(all) {
 }
 
 // ---------- Torneio (E8) ----------
+const FEW_VER = 5, FEW_FIELD = 20; // abaixo disso: sem ★ na versão / aviso de campo pequeno
 function torneio(all) {
   const sd = sides(all);
   if (!sd.length) return "";
@@ -241,16 +242,19 @@ function torneio(all) {
   const best = R.versions[0], many = R.versions.length > 1;
   // de onde vêm os dados de cada versão, quando não são (só) do set atual
   const from = (v) => (v.sets.some((s) => s !== curSet) ? "dados de " + v.sets.map((s) => setName(s)).join(", ") : "");
-  if (best && many) h += `<p class="verdict">Recomendação: <b>${esc(best.ver)}</b> · ${pct(best.expected)} esperado contra o campo${best.expected - R.versions[1].expected < 0.04 ? ", praticamente empatada com " + esc(R.versions[1].ver) : ""}.${best.n < 8 ? " Ainda com poucas partidas: trate como palpite." : ""}</p>`;
+  // versão com menos de FEW_VER partidas não ganha ★: aparece marcada "(poucos dados)"
+  const fewV = best && best.n < FEW_VER;
+  if (best && many) h += `<p class="verdict">${fewV ? "Palpite (poucos dados)" : "Recomendação"}: <b>${esc(best.ver)}</b> · ${pct(best.expected)} esperado contra o campo${best.expected - R.versions[1].expected < 0.04 ? ", praticamente empatada com " + esc(R.versions[1].ver) : ""}.${fewV ? ` Só ${best.n} partida${best.n !== 1 ? "s" : ""} com ela: pode ser sorte.` : best.n < 8 ? " Ainda com poucas partidas: trate como palpite." : ""}</p>`;
   else if (best) h += `<p class="verdict">Só a versão <b>${esc(best.ver)}</b> tem partidas com este deck: sem outra para comparar, não há recomendação. Contra o campo ela rende cerca de ${pct(best.expected)}.${best.n < 8 ? " Ainda com poucas partidas: trate como palpite." : ""}</p>`;
   h += `<div class="pg">Esperado contra o campo</div>${R.versions.map((v, i) => { const top = many && i === 0, src = from(v);
-      return `<div class="br${top ? " best" : ""}"><div class="nm">${esc(v.ver)}${top ? " ★" : ""}<small>real ${pct(v.p)} em ${v.n} · cobre ${pct(v.coverage)}${src ? " · " + esc(src) : ""}</small></div><div class="wr ${tone(v.expected)}"><span class="wf" style="left:${Math.min(v.expected, 0.5) * 100}%;width:${Math.abs(v.expected - 0.5) * 100}%"></span><span class="w50"></span><span class="wp" style="left:${v.expected * 100}%"></span></div><div class="pc ${tone(v.expected)}">${pct(v.expected)}</div></div>`; }).join("")}${AXIS}
+      return `<div class="br${top ? " best" : ""}"><div class="nm">${esc(v.ver)}${top ? (v.n < FEW_VER ? ' <span class="m">(poucos dados)</span>' : " ★") : ""}<small>real ${pct(v.p)} em ${v.n} · cobre ${pct(v.coverage)}${src ? " · " + esc(src) : ""}</small></div><div class="wr ${tone(v.expected)}"><span class="wf" style="left:${Math.min(v.expected, 0.5) * 100}%;width:${Math.abs(v.expected - 0.5) * 100}%"></span><span class="w50"></span><span class="wp" style="left:${v.expected * 100}%"></span></div><div class="pc ${tone(v.expected)}">${pct(v.expected)}</div></div>`; }).join("")}${AXIS}
     <p class="m">"Cobre": parte do campo contra a qual essa versão já jogou.</p></div>`;
   const field = R.practice.slice().sort((a, b) => b.share - a.share);
-  h += `<div class="card"><h2>O campo</h2><p class="m" style="margin-top:0">Quem tu mais enfrenta neste recorte.</p>${field.slice(0, 8).map((x) => `<div class="fr">${avatar(x.opp, 24)}<div class="nm">${esc(x.opp)}</div><div class="fbar"><i style="width:${x.share * 100}%"></i></div><div class="m">${pct(x.share)}</div></div>`).join("")}</div>`;
+  const fieldNote = R.fieldSize < FEW_FIELD ? ` <b class="l">Campo pequeno:</b> com menos de ${FEW_FIELD} partidas, as porcentagens mudam muito a cada jogo.` : "";
+  h += `<div class="card"><h2>O campo · ${R.fieldSize} partida${R.fieldSize !== 1 ? "s" : ""}</h2><p class="m" style="margin-top:0">Quem tu mais enfrenta neste recorte.${fieldNote}</p>${field.slice(0, 8).map((x) => `<div class="fr">${avatar(x.opp, 24)}<div class="nm">${esc(x.opp)}</div><div class="fbar"><i style="width:${x.share * 100}%"></i></div><div class="m">${pct(x.share)}</div></div>`).join("")}</div>`;
   // só entra o que está abaixo de 50% (taxa suavizada) ou que este deck ainda não enfrentou
   const train = R.practice.filter((x) => !x.n || x.sm < 0.5).slice(0, 6);
-  h += `<div class="card"><h2>Matchups para treinar</h2><p class="m" style="margin-top:0">Os que mais pesam: frequentes no campo e com win rate abaixo de 50%, ou que este deck ainda não enfrentou.</p>${!train.length ? '<p class="m">Nenhum matchup do campo está abaixo de 50% com este deck.</p>' : train.map((x) => x.n ? `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>${rec(x)} · ${pct(x.share)} do campo</small></div>${wr(x)}<div class="pc ${tone(x.p)}">${pct(x.p)}</div></div>` : `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>nunca jogou com este deck · ${pct(x.share)} do campo</small></div><div></div><div class="pc">—</div></div>`).join("") + AXIS}</div>`;
+  h += `<div class="card"><h2>Matchups para treinar</h2><p class="m" style="margin-top:0">Os que mais pesam: frequentes no campo e com win rate abaixo de 50%, ou que este deck ainda não enfrentou.</p>${!train.length ? '<p class="m">Nenhum matchup do campo está abaixo de 50% com este deck.</p>' : train.map((x) => x.n ? `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>${rec(x)}${x.n < 3 ? " (poucos dados)" : ""} · ${pct(x.share)} do campo</small></div>${wr(x)}<div class="pc ${tone(x.p)}">${pct(x.p)}</div></div>` : `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>nunca jogou com este deck · ${pct(x.share)} do campo</small></div><div></div><div class="pc">—</div></div>`).join("") + AXIS}</div>`;
   return h;
 }
 
