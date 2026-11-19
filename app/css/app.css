@@ -832,3 +832,80 @@ body.home-on #rec{visibility:hidden}
 .bkline span{flex:1}
 .bkline button{border:0;background:none;color:var(--gold);font:600 14px var(--f-b);cursor:pointer;padding:6px}
 .bkline .x{color:var(--mut)}
+
+/* ===== 0.9.4: placar "mesa" (versão A) — quem está no turno ganha a tela ===== */
+.board{display:flex;flex-direction:column;--cmp:160px;--midh:132px;--swap:.4s cubic-bezier(.2,.8,.2,1)}
+.board .pn{flex:1 1 0px;min-height:0;justify-content:flex-start;gap:14px;padding:18px 16px 20px;
+  transition:flex-grow var(--swap),flex-shrink var(--swap),flex-basis var(--swap),padding var(--swap)}
+.board .pn.cmp{flex:0 0 var(--cmp);justify-content:center;gap:10px;padding:12px 14px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--a) 16%,var(--bg)),color-mix(in srgb,var(--b) 13%,var(--bg)))}
+.board .pn.act{box-shadow:inset 0 0 0 4px var(--gold)}
+/* lado ativo */
+.pa-h{display:flex;align-items:center;gap:12px;flex:none}
+.pa-n{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.pa-t{font:14px var(--f-d);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
+.pa-turn{font:10px/1 var(--f-d);color:var(--ink);background:var(--gold);padding:5px 7px;white-space:nowrap}
+.pa-clk{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.pa-clk .clk{font:22px/1 var(--f-d);color:var(--gold)}
+.pa-clk small{font:16px/1 var(--f-b);color:var(--mut)}
+.pa-s{flex:none;display:flex;align-items:center;justify-content:center;gap:14px;min-width:0}
+.board .pa-s .pts{font:96px/1 var(--f-d);min-width:0;flex:none;text-align:center;text-shadow:6px 6px 0 var(--b)}
+.pa-i{display:flex;flex-direction:column;gap:4px;font:19px/1 var(--f-b);min-width:0}
+.pa-de{font:11px/1 var(--f-d);color:var(--mut)}
+.pa-i .left{color:var(--gold)}
+.pa-i .almost{font:10px/1.4 var(--f-d);color:var(--gold);text-align:left}
+.board .pn.act .segbar{flex:none;margin:0;gap:4px;padding:4px;box-shadow:0 0 0 3px var(--tx)}
+.board .pn.act .segbar i{height:30px}
+.srcb.big{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(44px,2fr) minmax(44px,1fr);gap:10px}
+.board .srcb.big .act-b{height:auto;min-height:44px;font-size:15px}
+.board .srcb.big .act-b.c,.board .srcb.big .act-b.h{box-shadow:inset 0 -5px 0 rgba(0,0,0,.35)}
+.board .srcb.big .act-b.o,.board .srcb.big .act-b.m{font-size:13px}
+/* lado compacto (fora do turno) */
+.pc-h{display:flex;align-items:center;gap:10px;flex:none}
+.pc-n{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.pc-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font:10px/1.2 var(--f-d)}
+.pc-t>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-t .clk{font:12px/1 var(--f-d);color:var(--mut);flex:none}
+.board .pn.cmp .segbar{margin:0;gap:2px;padding:2px;box-shadow:0 0 0 2px var(--mut)}
+.board .pn.cmp .segbar i{height:10px}
+.pc-n .srcs{font:17px/1 var(--f-b);color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.board .pc-h .pts{font:34px/1 var(--f-d);min-width:0;flex:none;text-align:right;text-shadow:3px 3px 0 var(--b)}
+.board .pc-h .pts.almost1{color:var(--gold)}
+.srcb.row{flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.board .srcb.row .act-b{height:44px;font-size:10px}
+.board .act-b[disabled]{cursor:default}
+/* faixa do meio */
+.board .mid{flex:0 0 var(--midh);display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:10px;padding:10px 12px;background:#07050f;border-block:3px solid var(--gold);min-width:0}
+.mid-r{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.board .mid-l{display:flex;flex-direction:column;gap:4px;flex:none;font:inherit;color:var(--tx)}
+.mid-g{font:10px/1.2 var(--f-d);color:var(--gold)}
+.board .mid-t{font:19px/1 var(--f-b);color:var(--tx);margin:0;white-space:nowrap;overflow:visible}
+.mid-bf{min-width:0;display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right;font:17px/1 var(--f-b);color:var(--mut)}
+.mid-bf span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mid-bf b{color:var(--tx);font-weight:400}
+.board .mid-b{display:flex;gap:8px}
+.board .mb{flex:none;width:56px;min-width:56px;height:56px;font:22px/1 var(--f-b)}
+.board .mb.pass{flex:1 1 0;width:auto;min-width:0;padding:0 6px;font:clamp(10px,3.4vw,13px)/1 var(--f-d);white-space:nowrap;box-shadow:0 4px 0 var(--gold-d)}
+@media (prefers-reduced-motion:reduce){.board .pn{transition:none}}
+/* com battlefields, abaixo de 390 o "de partida" sai para caber o nome do battlefield */
+@media (max-width:389px){.mid-r.bf .mid-t .dp{display:none}}
+/* telas estreitas (320) */
+@media (max-width:359px){
+  .pa-h .av{--s:50px!important}
+  .pa-t{font-size:12px}
+  .pa-clk .clk{font-size:16px}
+  .board .mid-t{font-size:17px}
+  .mid-bf{font-size:15px}
+}
+/* telas baixas (568): compacto 140px e lado ativo mais justo, sem cortar botões */
+@media (max-height:640px){
+  .board{--cmp:140px}
+  .board .pn{gap:8px;padding:12px 14px 14px}
+  .board .pn.cmp{gap:8px;padding:8px 12px}
+  .pa-h .av{--s:44px!important}
+  .pa-n{gap:4px}
+  .board .pa-s .pts{font-size:64px;text-shadow:4px 4px 0 var(--b)}
+  .pa-i{font-size:16px;gap:3px}
+  .board .pn.act .segbar i{height:20px}
+  .srcb.big{gap:8px}
+}

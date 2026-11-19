@@ -104,39 +104,64 @@ function segBar(g, side, name) {
   return `<div class="segbar" role="img" aria-label="${pts} de ${WIN} pontos">${Array.from({ length: WIN }, (_, i) =>
     `<i style="background:${i < pts ? col(srcs[i] || "other") : "#2a1f48"}" class="${i === pts && pts === WIN - 1 ? "next" : ""}"></i>`).join("")}</div>`;
 }
+// ---------- placar "mesa" (0.9.4, versão A) ----------
+// Quem está no turno ganha a maior parte da tela; o outro lado fica compacto (altura fixa).
+// Ao trocar o turno as alturas trocam com transição (CSS); nos SWAP_MS seguintes os botões de
+// ponto ficam desabilitados para que um toque duplo em "Passar turno" não vire ponto do outro lado
+// (e um 2º "Passar turno" nesse intervalo é ignorado). Desfazer funciona sempre.
+const SWAP_MS = 400;
+let guardUntil = 0;
+const guarded = () => Date.now() < guardUntil;
+function setGuard() { guardUntil = Date.now() + SWAP_MS; }
 function panel(side) {
   const g = G(), name = side === "me" ? L.my : L.opp, pts = g.points[side], act = active(g) === side;
   const [a, b] = legendColors(name), s = sourcesOf(g, side);
   const label = side === "me" ? (L.deckId && S.deck(L.deckId) ? S.deck(L.deckId).name : name) : name;
   // CONQUER/HOLD levam a cor do domínio: o texto fica escuro nos domínios claros (Ordem, Corpo, Calma, Mente)
-  const ka = inkOn(a), kb = inkOn(b);
-  return `<div class="pn ${side} ${act ? "act" : ""}" style="--a:${a};--b:${b};--ca:${ka.bg};--ia:${ka.ink};--cb:${kb.bg};--ib:${kb.ink}">
-    <div class="pn-h">${avatar(name, 44)}<div class="pn-n"><div class="pn-t"><span>${esc(label).toUpperCase()}</span><span class="clk${act ? " on" : ""}">⏱ <b id="clk-${side}">${fmtClock(liveTime(g, side))}</b></span></div>${segBar(g, side, name)}
-      <div class="pn-s2"><span class="${act ? "turn" : ""}">${act ? (side === "me" ? "TEU TURNO" : "TURNO DELE") : ""}</span><span class="srcs">C${s.conquer} · H${s.hold}${s.other ? " · +" + s.other : ""}</span></div></div>
-      <output class="pts" aria-live="polite">${pts}</output></div>
-    ${pts === WIN - 1 ? '<div class="almost">▲ FALTA 1 PONTO ▲</div>' : ""}
-    <div class="srcb">
-      <button type="button" class="act-b c" data-side="${side}" data-d="1" data-src="conquer" aria-label="Ponto de conquer para ${esc(name)}">CONQUER</button>
-      <button type="button" class="act-b h" data-side="${side}" data-d="1" data-src="hold" aria-label="Ponto de hold para ${esc(name)}">HOLD</button>
-      <button type="button" class="act-b o" data-side="${side}" data-d="1" data-src="other" aria-label="Ponto de outra origem para ${esc(name)}">+1</button>
-      <button type="button" class="act-b m" data-side="${side}" data-d="-1" aria-label="Tirar um ponto de ${esc(name)}">−1</button>
-    </div>
-    ${act ? "" : ""}</div>`;
+  const ka = inkOn(a), kb = inkOn(b), off = guarded() ? " disabled" : "";
+  const bt = (cls, d, src, txt, aria) => `<button type="button" class="act-b ${cls}" data-side="${side}" data-d="${d}"${src ? ` data-src="${src}"` : ""} aria-label="${aria}"${off}>${txt}</button>`;
+  const btns = bt("c", 1, "conquer", act ? "CONQUER" : "CONQ", `Ponto de conquer para ${esc(name)}`)
+    + bt("h", 1, "hold", "HOLD", `Ponto de hold para ${esc(name)}`)
+    + bt("o", 1, "other", "+1", `Ponto de outra origem para ${esc(name)}`)
+    + bt("m", -1, "", "−1", `Tirar um ponto de ${esc(name)}`);
+  const clk = `<b id="clk-${side}">${fmtClock(liveTime(g, side))}</b>`, nm = esc(label).toUpperCase();
+  const body = act
+    ? `<div class="pa-h">${avatar(name, 60)}<div class="pa-n"><span class="pa-t">${nm}</span><span class="pa-turn">▶ ${side === "me" ? "TEU TURNO" : "TURNO DELE"}</span></div>
+        <div class="pa-clk"><span class="clk on">${clk}</span><small>${side === "me" ? "teu relógio" : "relógio dele"}</small></div></div>
+      <div class="pa-s"><output class="pts" aria-live="polite">${pts}</output><div class="pa-i"><span class="pa-de">DE ${WIN}</span><span class="srcs">Conquer ${s.conquer} · Hold ${s.hold}</span>${s.other ? `<span class="srcs">+${s.other} ${s.other === 1 ? "outro" : "outros"}</span>` : ""}${pts === WIN - 1 ? '<span class="almost">▲ FALTA 1 PONTO ▲</span>' : `<span class="left">faltam ${Math.max(0, WIN - pts)}</span>`}</div></div>
+      ${segBar(g, side, name)}
+      <div class="srcb big">${btns}</div>`
+    : `<div class="pc-h">${avatar(name, 40)}<div class="pc-n"><div class="pc-t"><span>${nm}</span><span class="clk">${clk}</span></div>${segBar(g, side, name)}
+        <span class="srcs">Conquer ${s.conquer} · Hold ${s.hold}${s.other ? " · +" + s.other : ""}</span></div><output class="pts${pts === WIN - 1 ? " almost1" : ""}" aria-live="polite">${pts}</output></div>
+      <div class="srcb row">${btns}</div>`;
+  return { cls: `pn ${side} ${act ? "act" : "cmp"}`, style: `--a:${a};--b:${b};--ca:${ka.bg};--ia:${ka.ink};--cb:${kb.bg};--ib:${kb.ink}`,
+    aria: `${side === "me" ? "Tu" : "Oponente"}: ${name}, ${act ? "no turno" : "fora do turno"}`, body };
 }
-function renderPlay() {
-  const el = $("#live"), g = G(), ms = matchScore();
-  const bf = [g.myBf, g.oppBf].filter(Boolean).join(" · ");
-  el.innerHTML = `<div class="board">
-    ${panel("opp")}
-    <div class="mid">
-      <div class="mid-l">${L.fmt === "bo3" ? "GAME " + g.n + "<br><span>" + ms.w + " – " + ms.l + "</span>" : "PARTIDA<br><span>BO1</span>"}</div>
-      <div class="mid-c"><div class="mid-vs">VS</div><div class="mid-t">TURNO ${turnNo(g)} · <b id="clk-total">${fmtClock(Date.now() - (L.startedAt || Date.now()))}</b>${bf ? " · " + esc(bf).toUpperCase() : ""}</div></div>
-      <div class="mid-b"><button type="button" class="mb" id="lv-undo" aria-label="Desfazer última ação" ${g.log.length ? "" : "disabled"}>↶</button>
-      <button type="button" class="mb pass" id="lv-pass">PASSAR<br>TURNO</button>
-      <button type="button" class="mb" id="lv-menu" aria-label="Opções da partida">⋯</button></div>
-    </div>
-    ${panel("me")}
-  </div>`;
+function midHTML() {
+  const g = G(), ms = matchScore(), me = active(g) === "me";
+  const bf = g.myBf || g.oppBf ? `<div class="mid-bf">${g.myBf ? `<span>Teu bf: <b>${esc(g.myBf)}</b></span>` : ""}${g.oppBf ? `<span>Dele: <b>${esc(g.oppBf)}</b></span>` : ""}</div>` : "";
+  return `<div class="mid-r${bf ? " bf" : ""}"><div class="mid-l"><span class="mid-g">${L.fmt === "bo3" ? "GAME " + g.n + " · " + ms.w + "–" + ms.l : "PARTIDA BO1"}</span>
+      <span class="mid-t">Turno ${turnNo(g)} · <b id="clk-total">${fmtClock(Date.now() - (L.startedAt || Date.now()))}</b><span class="dp"> de partida</span></span></div>${bf}</div>
+    <div class="mid-b"><button type="button" class="mb" id="lv-undo" aria-label="Desfazer última ação" ${g.log.length ? "" : "disabled"}>↶</button>
+      <button type="button" class="mb pass" id="lv-pass" aria-label="Passar o turno ${me ? "para o oponente" : "para ti"}">${me ? "PASSAR TURNO ▸" : "◂ PASSAR TURNO"}</button>
+      <button type="button" class="mb" id="lv-menu" aria-label="Opções da partida">⋯</button></div>`;
+}
+// fresh: monta o placar do zero (sem animação). Senão atualiza os mesmos elementos, para que a
+// troca de alturas entre os lados seja animada pela transição do CSS.
+function renderPlay(fresh = false) {
+  const el = $("#live"), g = G(), act = active(g);
+  let board = fresh ? null : $(".board", el);
+  const focus = document.activeElement && board && board.contains(document.activeElement) ? document.activeElement.id : "";
+  if (!board) { el.innerHTML = `<div class="board"><div class="pn opp" role="region"></div><div class="mid"></div><div class="pn me" role="region"></div></div>`; board = $(".board", el); }
+  else if (board.dataset.act && board.dataset.act !== act) setGuard();
+  board.dataset.act = act;
+  for (const side of ["opp", "me"]) {
+    const p = panel(side), n = $(".pn." + side, board);
+    n.className = p.cls; n.setAttribute("style", p.style); n.setAttribute("aria-label", p.aria); n.innerHTML = p.body;
+  }
+  $(".mid", board).innerHTML = midHTML();
+  if (focus) { const f = document.getElementById(focus); if (f && !f.disabled) f.focus(); }
+  if (guarded()) setTimeout(() => { if (!guarded()) $$("#live .board .act-b").forEach((x) => (x.disabled = false)); }, guardUntil - Date.now() + 10);
 }
 // Origem dos pontos de um lado (−1 cancela o último ponto daquele lado).
 export function sourcesOf(g, side) {
@@ -146,6 +171,7 @@ export function sourcesOf(g, side) {
 }
 function srcSummary(g, side) { const s = sourcesOf(g, side); return s.conquer + s.hold + s.other ? `C ${s.conquer} · H ${s.hold}${s.other ? " · +" + s.other : ""}` : ""; }
 async function point(side, d, src = null) {
+  if (guarded()) return; // toque logo após a troca de turno: ignorado (ver SWAP_MS)
   const g = G();
   const v = g.points[side] + d;
   if (v < 0) return;
@@ -166,6 +192,7 @@ function undo() {
   persist(); renderPlay();
 }
 function pass() {
+  if (guarded()) return; // toque duplo em "Passar turno" não devolve o turno
   const g = G(); tick(g); g.passes++;
   g.log.push({ t: Date.now(), side: "turn", d: 0, turn: turnNo(g), active: active(g), me: g.points.me, opp: g.points.opp });
   persist(); renderPlay();
@@ -335,7 +362,7 @@ function render(opts = {}) {
   if (!L) L = setupState();
   persist();
   if (L.phase === "setup") { syncEvent(); persist(); renderSetup(); }
-  else if (L.phase === "play") { const g = G(); if (g.time && !g.clockAt) { g.clockAt = Date.now(); persist(); } renderPlay(); wake(true); startClockUI(); }
+  else if (L.phase === "play") { const g = G(); if (g.time && !g.clockAt) { g.clockAt = Date.now(); persist(); } renderPlay(true); wake(true); startClockUI(); }
   else if (L.phase === "between") renderBetween();
   else if (L.phase === "gameover") renderGameOver();
   else renderSummary();
