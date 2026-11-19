@@ -909,3 +909,11 @@ body.home-on #rec{visibility:hidden}
   .board .pn.act .segbar i{height:20px}
   .srcb.big{gap:8px}
 }
+
+/* 0.9.4: proteção depois de passar o turno */
+.board .act-b[disabled]{opacity:.6;transition:opacity .15s}
+.board .act-b.zn{outline:2px dashed var(--gold);outline-offset:-4px;filter:saturate(.5) brightness(.8)}
+.board .act-b.blk{animation:blk .3s}
+@keyframes blk{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@media (prefers-reduced-motion:reduce){.board .act-b.blk{animation:none}}
+.board .mid-l .mid-g{color:var(--gold)}

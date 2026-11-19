@@ -113,6 +113,18 @@ const SWAP_MS = 400;
 let guardUntil = 0;
 const guarded = () => Date.now() < guardUntil;
 function setGuard() { guardUntil = Date.now() + SWAP_MS; }
+// Onde estava o "Passar turno" vira o CONQUER/HOLD de quem recebeu o turno. Por PASS_ZONE_MS,
+// um toque nessa área (com folga) é ignorado e os botões que caem nela ficam marcados.
+const PASS_ZONE_MS = 900;
+let passZone = null;
+const inZone = (x, y) => passZone && Date.now() < passZone.until && x >= passZone.l && x <= passZone.r && y >= passZone.t && y <= passZone.b;
+function markZone() {
+  if (!passZone) return;
+  $$("#live .board .act-b").forEach((b) => {
+    const r = b.getBoundingClientRect();
+    b.classList.toggle("zn", Date.now() < passZone.until && r.right > passZone.l && r.left < passZone.r && r.bottom > passZone.t && r.top < passZone.b);
+  });
+}
 function panel(side) {
   const g = G(), name = side === "me" ? L.my : L.opp, pts = g.points[side], act = active(g) === side;
   const [a, b] = legendColors(name), s = sourcesOf(g, side);
@@ -143,7 +155,7 @@ function midHTML() {
   return `<div class="mid-r${bf ? " bf" : ""}"><div class="mid-l"><span class="mid-g">${L.fmt === "bo3" ? "GAME " + g.n + " · " + ms.w + "–" + ms.l : "PARTIDA BO1"}</span>
       <span class="mid-t">Turno ${turnNo(g)} · <b id="clk-total">${fmtClock(Date.now() - (L.startedAt || Date.now()))}</b><span class="dp"> de partida</span></span></div>${bf}</div>
     <div class="mid-b"><button type="button" class="mb" id="lv-undo" aria-label="Desfazer última ação" ${g.log.length ? "" : "disabled"}>↶</button>
-      <button type="button" class="mb pass" id="lv-pass" aria-label="Passar o turno ${me ? "para o oponente" : "para ti"}">${me ? "PASSAR TURNO ▸" : "◂ PASSAR TURNO"}</button>
+      <button type="button" class="mb pass" id="lv-pass" aria-label="Passar o turno ${me ? "para o oponente" : "para ti"}">${me ? "PASSAR TURNO ▲" : "▼ PASSAR TURNO"}</button>
       <button type="button" class="mb" id="lv-menu" aria-label="Opções da partida">⋯</button></div>`;
 }
 // fresh: monta o placar do zero (sem animação). Senão atualiza os mesmos elementos, para que a
@@ -193,6 +205,13 @@ function undo() {
 }
 function pass() {
   if (guarded()) return; // toque duplo em "Passar turno" não devolve o turno
+  const pb = $("#lv-pass");
+  if (pb) {
+    const r = pb.getBoundingClientRect();
+    passZone = { l: r.left - 16, r: r.right + 16, t: r.top - 24, b: r.bottom + 24, until: Date.now() + PASS_ZONE_MS };
+    setTimeout(markZone, SWAP_MS + 20);
+    setTimeout(() => { passZone = null; $$("#live .board .act-b.zn").forEach((b) => b.classList.remove("zn")); }, PASS_ZONE_MS + 20);
+  }
   const g = G(); tick(g); g.passes++;
   g.log.push({ t: Date.now(), side: "turn", d: 0, turn: turnNo(g), active: active(g), me: g.points.me, opp: g.points.opp });
   persist(); renderPlay();
@@ -401,7 +420,10 @@ function bind() {
       L.startedAt = Date.now(); L.games = [newGame(1, L.first, L.myBf, L.oppBf)]; L.cur = 0; L.phase = "play";
       persist(); render(); return;
     }
-    if (b.classList.contains("act-b")) return point(b.dataset.side, +b.dataset.d, b.dataset.src || null);
+    if (b.classList.contains("act-b")) {
+      if (inZone(e.clientX, e.clientY)) { b.classList.remove("blk"); void b.offsetWidth; b.classList.add("blk"); if (navigator.vibrate) try { navigator.vibrate([10, 40, 10]); } catch (x) {} return; }
+      return point(b.dataset.side, +b.dataset.d, b.dataset.src || null);
+    }
     if (b.id === "lv-go-undo") { L.phase = "play"; undo(); render(); return; }
     if (b.id === "lv-go-ok") return finishGame(L.pending, false);
     if (b.id === "lv-undo") return undo();

@@ -96,3 +96,13 @@ Versão `0.9.4 · Arcade` (`app/js/core.js`) e cache do service worker `rbt-v0.9
 - As setas ▸/◂/▶ não existem na Press Start 2P e saem na fonte de reserva, menores. É o mesmo comportamento do mockup.
 - O APK não foi gerado de novo: `versionCode` e assinatura não foram tocados.
 - Falhas antigas do baseline continuam abertas (lista acima).
+
+## Proteção mínima para o teste em mesa (19/11/2026)
+
+Depois dos retestes de QA (Q94-01) e experiência (U94-02/03/06), o dono escolheu testar a versão A em partidas reais antes de decidir o layout definitivo. Ajustes:
+
+- **Área do antigo "Passar turno" protegida por 0,9 s** (`app/js/live.js`): ao passar, o retângulo do botão (com folga de 16/24 px) fica bloqueado; toques ali são ignorados, o botão treme e vibra curto. Os botões de ponto que caem nessa área ficam com borda tracejada e apagados até liberar. Fora dela vale a guarda de 0,4 s de antes. Desfazer nunca é bloqueado.
+- **Setas apontam para quem recebe o turno:** "PASSAR TURNO ▲" no meu turno (vai para o oponente, em cima) e "▼ PASSAR TURNO" no dele.
+- **"GAME n · v–d" / "PARTIDA BO1" em ouro** (Q94-03: CSS antigo sobrescrevia).
+- Testes: repro do QA (`/home/claude/qa094/q2b_finger.py`, F2) agora passa nos 8 casos; verificação própria da zona 12/12 (bloqueia a 600 ms, libera a 1,2 s, toque fora da zona a 450 ms conta). Regressão t01–t09 282/304 (igual), t10 36/36, t11 47/47. Asserts ajustados: t11 A-07 (setas novas) e t04 (espera 1 s antes de marcar pontos logo após passar).
+- Fica para a decisão de layout: o "Passar" continua mudando de posição (U94-01), paisagem/tela dividida (Q94-02), cortes de nomes longos (Q94-04), leitor de tela (U94-05).
