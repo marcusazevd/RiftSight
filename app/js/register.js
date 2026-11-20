@@ -529,7 +529,12 @@ function bind() {
     if (b.id === "go-resume") return showView("live");
     if (b.id === "ev-start") { const ev = await startEvent(); if (ev) { collect(); F.eventId = ev.id; F.ctx = ev.type; if (ev.deckId) { const d = S.deck(ev.deckId); F.deckId = d.id; F.my = d.legend; F.versionId = ev.versionId; } render(); } return; }
     if (b.id === "ev-close") { const ev = S.openEvent(); if (ev && (await closeEvent(ev))) { F.eventId = null; F.ctx = freeCtx(); F.kind = ""; render(); } return; }
-    if (b.dataset.kind !== undefined) { collect(); F.kind = b.dataset.kind; render(); return; }
+    if (b.dataset.kind !== undefined) {
+      collect();
+      const k = b.dataset.kind;
+      if (k && k !== F.kind && !(await confirmKindSwitch(k))) return;
+      F.kind = k; render(); return;
+    }
     if (b.id === "f-noopp") { collect(); F.opp = ""; render(); return; }
     if (b.dataset.fmt) { collect(); F.fmt = b.dataset.fmt; F.result = ""; render(); return; }
     if (b.dataset.bfg !== undefined) return openBfSheet(b.dataset.bfg === "b1" ? "b1" : +b.dataset.bfg);
@@ -572,6 +577,19 @@ function bind() {
     if (e.target.id === "f-date") { collect(); if (!F.setTouched) render(); }
     if (e.target.id === "f-set") { F.set = e.target.value; F.setTouched = true; }
   });
+}
+
+// Editar uma partida jogada e trocar para ID/BYE descarta games, placar e log ao atualizar (e a edição não tem
+// Desfazer): pede confirmação dizendo o que se perde (Q95-03).
+async function confirmKindSwitch(k) {
+  const old = F.editId ? S.getState().matches.find((m) => m.id === F.editId) : null;
+  if (!old || old.kind || !(old.games || []).length) return true;
+  const n = old.games.length, live = old.source === "contador" || old.games.some((g) => g.points || (g.log && g.log.length));
+  const lost = [`${n === 1 ? "o game" : `os ${n} games`} (resultado, quem começou e battlefields)`];
+  if (live) lost.push("os pontos e o log do contador");
+  if (k === "bye" && old.opp) lost.push(`o oponente (${old.opp})`);
+  const last = lost.pop();
+  return confirmBox(`Trocar para ${KIND_LABEL[k]}?`, `Ao atualizar, esta partida vira ${k === "bye" ? "um BYE" : "um ID"} e ${lost.length ? lost.join(", ") + " e " : ""}${last} ${n === 1 && !lost.length ? "é descartado" : "são descartados"}. Isso não tem Desfazer.`, `Trocar para ${KIND_LABEL[k]}`, true);
 }
 
 // monta e salva a partida a partir do formulário
@@ -737,8 +755,9 @@ function formFromMatch(m) {
   const byTime = m.format === "bo3" && (m.endedBy === "time" || m.source === "contador") && wins < 2 && losses < 2 && !(m.result === "D" && wins === 1 && losses === 1);
   return { ...blankForm(), editId: m.id, kind: m.kind || "", deckId: m.deckId || null, versionId: m.versionId || null, my: m.my, opp: m.opp, ver: m.deckId && S.deck(m.deckId) ? "" : m.version || "",
     timeResult: byTime ? m.result : null, timeGames: m.games.length, dateTouched: true, _fresh: true,
-    ctx: (m.event && m.event.type) || "Outro", eventId: (m.event && m.event.eventId) || null, round: (m.event && m.event.round) || null, turn: (m.games[0] && m.games[0].first) || "",
-    note: m.note || "", fmt: m.kind ? prefs.fmt || "bo1" : m.format, result: m.format === "bo1" ? m.result : "", myBf: (m.games[0] && m.games[0].myBf) || "", oppBf: (m.games[0] && m.games[0].oppBf) || "",
+    ctx: (m.event && m.event.type) || "Outro", eventId: (m.event && m.event.eventId) || null, round: (m.event && m.event.round) || null, turn: (!m.kind && m.games[0] && m.games[0].first) || "",
+    // ID/BYE → JOGUEI começa sem resultado: o empate do ID e a vitória do bye não foram jogados (Q95-04)
+    note: m.note || "", fmt: m.kind ? prefs.fmt || "bo1" : m.format, result: !m.kind && m.format === "bo1" ? m.result : "", myBf: (m.games[0] && m.games[0].myBf) || "", oppBf: (m.games[0] && m.games[0].oppBf) || "",
     games: gs, timeDraw: m.format === "bo3" && m.result === "D", date: toLocalInput(m.playedAt), set: m.set, setTouched: true, details: true };
 }
 
