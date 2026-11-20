@@ -288,11 +288,21 @@ function formStatus() {
 }
 // Incompleto: aparência de desabilitado e o motivo no próprio texto ("SALVAR · falta o oponente"), mas o
 // botão continua tocável para abrir a explicação completa do que falta (mesmas mensagens de antes).
+// O texto da barra também vai para uma região aria-live (polite), que não é recriada a cada mudança.
+const barSpeech = (st) => [st.main, st.sub, st.why].filter(Boolean).join(" · ");
+function saveBtnHTML(st) {
+  return `<button type="button" class="go sbtn${st.ok ? "" : " off"}" id="f-save" data-ok="${st.ok ? 1 : 0}"><span class="sb-m">${esc(st.main)}</span>${st.sub ? `<span class="sb-s"> · ${esc(st.sub)}</span>` : ""}${st.why ? `<span class="sb-w"> · ${esc(st.why)}</span>` : ""}</button>`;
+}
 function saveBarHTML() {
   const st = formStatus();
-  return `<div class="savebar" id="f-savebar"><button type="button" class="go sbtn${st.ok ? "" : " off"}" id="f-save" data-ok="${st.ok ? 1 : 0}"><span class="sb-m">${esc(st.main)}</span>${st.sub ? `<span class="sb-s"> · ${esc(st.sub)}</span>` : ""}${st.why ? `<span class="sb-w"> · ${esc(st.why)}</span>` : ""}</button></div>`;
+  return `<div class="savebar" id="f-savebar">${saveBtnHTML(st)}<span class="sr" id="f-sblive" aria-live="polite">${esc(barSpeech(st))}</span></div>`;
 }
-function paintBar() { const b = document.getElementById("f-savebar"); if (b) b.outerHTML = saveBarHTML(); }
+function paintBar() {
+  const bar = document.getElementById("f-savebar"); if (!bar) return;
+  const st = formStatus(), btn = document.getElementById("f-save"), live = document.getElementById("f-sblive");
+  if (btn) btn.outerHTML = saveBtnHTML(st);
+  if (live) { const t = barSpeech(st); if (live.textContent !== t) live.textContent = t; }
+}
 
 // "Data, set e notas · hoje · Radiance": a linha recolhida dos detalhes
 function detailsLine(ev) {
@@ -556,9 +566,12 @@ function bind() {
 }
 
 // monta e salva a partida a partir do formulário
-let saving = false;
+let saving = false, saveQuiet = 0;
+// Depois de salvar, o formulário novo aparece no mesmo lugar: um 2º toque (toque duplo) no SALVAR por
+// SAVE_QUIET_MS é ignorado, para não abrir um "Falta pouco" falso sobre o formulário vazio (Q95-01).
+export const SAVE_QUIET_MS = 800;
 async function save() {
-  if (saving) return;
+  if (saving || Date.now() < saveQuiet) return;
   collect();
   if (F.kind) return saveKind();
   const bo3 = F.fmt === "bo3";
@@ -639,6 +652,7 @@ async function commit(m, old) {
   saving = true;
   let ok = false;
   try { ok = await S.saveMatch(m); } finally { saving = false; }
+  if (ok) saveQuiet = Date.now() + SAVE_QUIET_MS;
   if (!ok) { await dialog({ title: "Não foi possível salvar", body: "<p>O aparelho está sem espaço. O formulário continua preenchido: faça um backup, remova fotos de lendas em Mais e tente de novo.</p>" }); return; }
   const wasEdit = !!old;
   // foto do formulário como estava ao salvar: o Desfazer devolve exatamente isto
