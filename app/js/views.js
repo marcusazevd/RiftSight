@@ -3,7 +3,7 @@ import { DOMAINS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { record, gameRecord, group, applyFilters, insights, toCSV, gameRows, firstLabel } from "./stats.js";
 import { esc, $, $$, avatar, domainPair, domainIcon, legendColors, dialog, confirmBox, toast, RUNE, setBadge, ord } from "./ui.js";
-import { RES, RES_SHORT, APP_VERSION, prefs, savePrefs, applyTheme, setName, fmtDate, eventRecord, registerView, showView, knownBattlefields, canonBf } from "./core.js";
+import { RES, RES_SHORT, APP_VERSION, prefs, savePrefs, applyTheme, setName, fmtDate, eventRecord, registerView, showView, knownBattlefields, canonBf, KIND_LABEL, roundText } from "./core.js";
 import { editMatch, legendOptions, bindPickers, startEvent, closeEvent } from "./register.js";
 import { LEGENDS } from "./data.js";
 
@@ -18,7 +18,22 @@ const IC = {
 
 // ================= Histórico =================
 let histTab = "matches";
+// Nome curto de um registro (diálogos e avisos): "Vitória contra Ahri", "ID contra Kai'Sa", "Bye da rodada 5".
+export function matchTitle(m) {
+  if (m.kind === "bye") return "Bye" + (m.event && m.event.round ? " da rodada " + m.event.round : "");
+  if (m.kind === "id") return "ID" + (m.opp ? " contra " + m.opp : "") + (m.event && m.event.round ? " (rodada " + m.event.round + ")" : "");
+  return `${RES[m.result]} contra ${m.opp}`;
+}
+// Rodada sem jogo (ID ou bye): aparece no histórico, sem placar nem turno.
+function kindRow(m) {
+  const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null;
+  const what = m.kind === "id" ? "empate combinado" + (m.opp ? " contra " + esc(m.opp) : "") : "sem oponente · conta como vitória";
+  return `<div class="hi ${esc(m.result)} kind">${m.opp ? avatar(m.opp, 36) : '<span class="av emp" style="--s:36px" aria-hidden="true">–</span>'}<div class="b"><b class="kd">${KIND_LABEL[m.kind]}</b> ${what}
+    <div class="m">${m.my ? "com " + esc(m.my) + (m.version ? " (" + esc(m.version) + ")" : "") + "<br>" : ""}${ev ? esc(ev.name) + " · rodada " + esc(m.event.round || "?") : esc((m.event && m.event.type) || "")} · ${fmtDate(m.playedAt)} · fora das estatísticas${m.note ? "<br>" + esc(m.note) : ""}</div></div>
+    <button class="x" data-ed="${esc(m.id)}" aria-label="Editar ${esc(matchTitle(m))}">✎</button><button class="x" data-del="${esc(m.id)}" aria-label="Apagar ${esc(matchTitle(m))}">✕</button></div>`;
+}
 function matchRow(m) {
+  if (m.kind) return kindRow(m);
   const g1 = m.games && m.games[0];
   const first = g1 && g1.first ? (g1.first === "me" ? "começou jogando" : "começou em segundo") : "";
   const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null;
@@ -36,14 +51,16 @@ function renderHist() {
       const es = evs.filter((e) => e.type === t), recs = es.map(eventRecord);
       const w = recs.reduce((a, r) => a + r.w, 0), l = recs.reduce((a, r) => a + r.l, 0), d = recs.reduce((a, r) => a + r.d, 0);
       const places = es.map((e) => e.placement).filter(Boolean), tops = es.filter((e) => e.topCut).length;
-      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + ord(Math.min(...places)) : ""}${places.length > 1 ? " · média: " + ord((places.reduce((a, b) => a + b, 0) / places.length).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${w}-${l}${d ? "-" + d : ""}</div><div class="pc">${w + l + d ? Math.round((w / (w + l + d)) * 100) + "%" : "—"}</div></div>`;
+      // a porcentagem é win rate: ID e bye ficam fora (o recorde ao lado continua com eles)
+      const pl = recs.flatMap((r) => r.matches).filter(S.isPlayed), pw = pl.filter((m) => m.result === "W").length;
+      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + ord(Math.min(...places)) : ""}${places.length > 1 ? " · média: " + ord((places.reduce((a, b) => a + b, 0) / places.length).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${w}-${l}${d ? "-" + d : ""}</div><div class="pc">${pl.length ? Math.round((pw / pl.length) * 100) + "%" : "—"}</div></div>`;
     }).join("")}</div>` : "";
     el.innerHTML = tabs + summary + `<div class="card"><h2>Eventos</h2>${evs.length ? evs.map((ev) => {
       const r = eventRecord(ev), dk = ev.deckId ? S.deck(ev.deckId) : null;
       return `<div class="evr ${ev.status === "open" ? "open" : "closed"}"><div class="b"><span class="tag">${esc(ev.type)}</span><b>${esc(ev.name)}</b>${ev.status === "open" ? ' <span class="live-dot">em andamento</span>' : ""}
         <div class="m">${fmtDate(ev.date)}${ev.place ? " · " + esc(ev.place) : ""}${dk ? " · " + esc(dk.name) : ""}</div>
         <div class="evs"><b>${r.w}-${r.l}${r.d ? "-" + r.d : ""}</b>${ev.placement ? ` · ${ord(ev.placement)}${ev.players ? " de " + esc(ev.players) : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
-        ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${esc(m.result)}" title="Rodada ${esc(m.event.round || "?")}: ${RES[m.result]} vs ${esc(m.opp)}">R${esc(m.event.round || "?")} ${RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
+        ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${esc(m.result)}${m.kind ? " k" : ""}" title="Rodada ${esc(m.event.round || "?")}: ${m.kind ? KIND_LABEL[m.kind] + " · " : RES[m.result] + " · "}${esc(roundText(m))}">R${esc(m.event.round || "?")} ${m.kind ? KIND_LABEL[m.kind] : RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
         ${ev.note ? `<div class="m">${esc(ev.note)}</div>` : ""}</div>
         <div class="evbtns">${r.n ? `<button class="x" data-evshare="${esc(ev.id)}" aria-label="Card para compartilhar" title="Card para compartilhar">⇪</button>` : ""}${ev.status === "open" ? `<button class="btn" data-evclose="${esc(ev.id)}" type="button">Encerrar</button>` : `<button class="x" data-evdel="${esc(ev.id)}" aria-label="Apagar evento">✕</button>`}</div></div>`;
     }).join("") : '<p class="m">Nenhum evento ainda. Comece um na tela Registrar.</p>'}
@@ -60,10 +77,10 @@ function bindHist() {
     if (b.dataset.ed) return editMatch(b.dataset.ed);
     if (b.dataset.del) {
       const m = S.getState().matches.find((x) => x.id === b.dataset.del); if (!m) return;
-      if (!(await confirmBox("Apagar partida?", `${RES[m.result]} contra ${m.opp} em ${fmtDate(m.playedAt)}.`, "Apagar", true))) return;
+      if (!(await confirmBox(m.kind ? "Apagar rodada?" : "Apagar partida?", `${matchTitle(m)} em ${fmtDate(m.playedAt)}.`, "Apagar", true))) return;
       const copy = JSON.parse(JSON.stringify(m));
       if (!(await S.deleteMatch(m.id))) return;
-      toast(`${RES[m.result]} contra ${m.opp} apagada`, { label: "Desfazer", fn: async () => { if (await S.saveMatch(copy)) toast("Partida restaurada"); } }, 8000);
+      toast(`${matchTitle(m)} apagad${m.kind === "bye" ? "o" : m.kind ? "o" : "a"}`, { label: "Desfazer", fn: async () => { if (await S.saveMatch(copy)) toast("Partida restaurada"); } }, 8000);
       return;
     }
     if (b.dataset.evshare) { const ev = S.evt(b.dataset.evshare); if (ev) { const { shareEvent } = await import("./share.js"); await shareEvent(ev); } return; }
@@ -185,7 +202,7 @@ function renderMore() {
   if (moreView === "decks") {
     const ds = st.decks.slice().sort((a, b) => (a.archived - b.archived) || a.name.localeCompare(b.name));
     el.innerHTML = back + `<div class="card"><h2>Meus decks</h2>${ds.length ? '<div class="list">' + ds.map((d) => {
-      const ms = st.matches.filter((m) => m.deckId === d.id), r = record(ms), last = (d.versions || [])[d.versions.length - 1];
+      const ms = S.played().filter((m) => m.deckId === d.id), r = record(ms), last = (d.versions || [])[d.versions.length - 1];
       return `<button class="li dkrow${d.archived ? " arch" : ""}" data-dk="${esc(d.id)}" type="button">${avatar(d.legend, 40)}<span class="dk-n"><b>${esc(d.name)}</b><span class="m">${esc(d.legend)} · ${last ? esc(last.name) : "sem versão"}${d.archived ? " · arquivado" : ""}</span></span><span class="m dk-r">${r.n ? r.w + "–" + r.l + (r.d ? "–" + r.d : "") : ""}</span><i aria-hidden="true">›</i></button>`;
     }).join("") + "</div>" : '<p class="m">Cadastre seus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
     <button class="btn pri" id="dk-new" type="button" style="margin-top:12px">＋ Novo deck</button></div>`;

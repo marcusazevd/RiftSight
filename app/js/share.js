@@ -1,7 +1,7 @@
 // Card compartilhável (T5): imagem PNG do evento ou do deck + texto pronto.
 import * as S from "./store.js";
 import { record, group, hardestMatchup, bestMatchup } from "./stats.js";
-import { RES_SHORT, eventRecord, fmtDate } from "./core.js";
+import { RES_SHORT, eventRecord, fmtDate, KIND_LABEL } from "./core.js";
 import { esc, $, dialog, toast, legendColors, legendInfo, setInfo } from "./ui.js";
 import { DOMAINS } from "./data.js";
 
@@ -87,7 +87,7 @@ async function eventCanvas(ev) {
   base(ctx);
   const r = eventRecord(ev), ms = r.matches.slice().sort((a, b) => (a.event.round || 0) - (b.event.round || 0));
   const dk = ev.deckId ? S.deck(ev.deckId) : null;
-  const my = (dk && dk.legend) || (ms[0] && ms[0].my) || "";
+  const my = (dk && dk.legend) || (ms.find((m) => m.my) || {}).my || "";
   const setId = (ms[0] && ms[0].set) || S.setForDate(ev.date || Date.now());
   let bx = 72; bx += badge(ctx, setId, bx, 176) + 14; text(ctx, (ev.type || "").toUpperCase(), bx, 176, `20px ${D}`, C.mut);
   shadowText(ctx, ev.name || "Evento", 72, 270, `700 72px ${B}`, C.tx, "left", W - 144);
@@ -118,11 +118,19 @@ async function eventCanvas(ev) {
     ctx.save(); ctx.translate(0, (rh - 58) / 2);
     const o = two ? [14, 82, 132, 166] : [20, 104, 168, 214]; // em duas colunas tudo fica mais junto, para o nome caber
     text(ctx, "R" + (m.event.round || i + 1), x + o[0], y + 38, `${two ? 18 : 20}px ${D}`, C.mut);
-    ctx.fillStyle = RC[m.result]; ctx.fillRect(x + o[1], y + 10, 40, 32);
-    text(ctx, RES_SHORT[m.result], x + o[1] + 20, y + 36, `18px ${D}`, "#120c22", "center");
-    const [a, b] = legendColors(m.opp); ctx.fillStyle = a; const cw = two ? 12 : 14; ctx.fillRect(x + o[2], y + 12, cw, 28); ctx.fillStyle = b; ctx.fillRect(x + o[2] + cw, y + 12, cw, 28);
-    const sc = m.score ? m.score.replace("-", "–") : m.games && m.games[0] && m.games[0].points ? m.games[0].points.me + "–" + m.games[0].points.opp : "";
-    text(ctx, "vs " + m.opp, x + o[3], y + 38, `700 34px ${B}`, C.tx, "left", two ? colW - o[3] - (sc ? 92 : 16) : 560);
+    const cw = two ? 12 : 14;
+    if (m.kind) {
+      // ID / bye: selo dourado mais largo (o texto passa por cima das cores da lenda, que não existem no bye)
+      ctx.fillStyle = C.gold; ctx.fillRect(x + o[1], y + 10, o[2] + 2 * cw - o[1], 32);
+      text(ctx, KIND_LABEL[m.kind], x + (o[1] + o[2] + 2 * cw) / 2, y + 36, `${two ? 14 : 18}px ${D}`, "#120c22", "center");
+    } else {
+      ctx.fillStyle = RC[m.result]; ctx.fillRect(x + o[1], y + 10, 40, 32);
+      text(ctx, RES_SHORT[m.result], x + o[1] + 20, y + 36, `18px ${D}`, "#120c22", "center");
+      const [a, b] = legendColors(m.opp); ctx.fillStyle = a; ctx.fillRect(x + o[2], y + 12, cw, 28); ctx.fillStyle = b; ctx.fillRect(x + o[2] + cw, y + 12, cw, 28);
+    }
+    const sc = m.kind ? "" : m.score ? m.score.replace("-", "–") : m.games && m.games[0] && m.games[0].points ? m.games[0].points.me + "–" + m.games[0].points.opp : "";
+    const who = m.kind === "bye" ? "sem oponente" : m.kind === "id" ? (m.opp ? "vs " + m.opp : "empate combinado") + " · sem games" : "vs " + m.opp;
+    text(ctx, who, x + o[3], y + 38, `700 34px ${B}`, m.kind ? C.mut : C.tx, "left", two ? colW - o[3] - (sc ? 92 : 16) : 560);
     if (sc) text(ctx, sc, x + colW - 20, y + 38, `22px ${D}`, RC[m.result], "right");
     ctx.restore();
   }
@@ -134,7 +142,7 @@ async function deckCanvas(dk) {
   await fonts();
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const ctx = cv.getContext("2d");
   base(ctx);
-  const all = S.getState().matches.filter((m) => m.deckId === dk.id);
+  const all = S.played().filter((m) => m.deckId === dk.id);
   const r = record(all), cur = S.setForDate(Date.now());
   let bx = 72; bx += badge(ctx, dk.set || cur, bx, 176) + 14; text(ctx, "DECK", bx, 176, `20px ${D}`, C.mut);
   await avatar(ctx, dk.legend, 72, 226, 240);
@@ -174,12 +182,12 @@ function eventText(ev) {
   const r = eventRecord(ev), dk = ev.deckId ? S.deck(ev.deckId) : null;
   const ms = r.matches.slice().sort((a, b) => (a.event.round || 0) - (b.event.round || 0));
   return [`🏆 ${ev.name} (${ev.type})${ev.place ? " — " + ev.place : ""}`,
-    `${dk ? dk.name + " · " + dk.legend : ms[0] ? ms[0].my : ""}`,
+    `${dk ? dk.name + " · " + dk.legend : (ms.find((m) => m.my) || {}).my || ""}`,
     `Resultado: ${recStr(r)}${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}`,
-    ...ms.map((m) => `R${m.event.round || "?"} ${RES_SHORT[m.result]} vs ${m.opp}${m.score ? " (" + m.score + ")" : ""}`)].filter(Boolean).join("\n");
+    ...ms.map((m) => m.kind === "bye" ? `R${m.event.round || "?"} BYE` : m.kind === "id" ? `R${m.event.round || "?"} ID${m.opp ? " vs " + m.opp : ""}` : `R${m.event.round || "?"} ${RES_SHORT[m.result]} vs ${m.opp}${m.score ? " (" + m.score + ")" : ""}`)].filter(Boolean).join("\n");
 }
 function deckText(dk) {
-  const all = S.getState().matches.filter((m) => m.deckId === dk.id), r = record(all);
+  const all = S.played().filter((m) => m.deckId === dk.id), r = record(all);
   const vers = group(all, (m) => m.version).sort((a, b) => b.n - a.n).slice(0, 3);
   return [`🃏 ${dk.name} · ${dk.legend}`, `${recStr(r)} · ${Math.round(r.p * 100)}% em ${r.n} partida${r.n !== 1 ? "s" : ""}`,
     ...vers.map((v) => `${v.k}: ${recStr(v)} (${Math.round(v.p * 100)}%)`)].join("\n");

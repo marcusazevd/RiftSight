@@ -117,9 +117,21 @@ export function resultFromGames(games) {
 // resumo de evento: recorde das partidas ligadas a ele
 export function eventRecord(ev) {
   const ms = S.getState().matches.filter((m) => m.event && m.event.eventId === ev.id);
-  const r = { w: 0, l: 0, d: 0, n: ms.length, matches: ms };
-  ms.forEach((m) => { if (m.result === "W") r.w++; else if (m.result === "L") r.l++; else r.d++; });
+  const r = { w: 0, l: 0, d: 0, n: ms.length, matches: ms, ids: 0, byes: 0 };
+  // ID conta como empate e bye como vitória (o resultado gravado já é esse); os dois ocupam a rodada
+  ms.forEach((m) => { if (m.result === "W") r.w++; else if (m.result === "L") r.l++; else r.d++; if (m.kind === "id") r.ids++; if (m.kind === "bye") r.byes++; });
   return r;
+}
+// Recorde no formato V–D–E (o E só aparece quando houver empate ou ID).
+export const recTxt = (r) => `${r.w}–${r.l}${r.d ? "–" + r.d : ""}`;
+export const KIND_LABEL = { id: "ID", bye: "BYE" };
+// Texto curto de uma rodada: "2–1 vs Viktor", "ID · vs Kai'Sa · sem games", "BYE · sem oponente".
+export function roundText(m) {
+  if (m.kind === "id") return (m.opp ? "vs " + m.opp : "sem oponente marcado") + " · sem games";
+  if (m.kind === "bye") return "sem oponente · conta como vitória";
+  const g1 = m.games && m.games[0];
+  const sc = m.score ? m.score.replace("-", "–") + " " : m.format !== "bo3" && g1 && g1.points ? g1.points.me + "–" + g1.points.opp + " " : "";
+  return sc + "vs " + m.opp;
 }
 
 // navegação: cada tela registra seu render

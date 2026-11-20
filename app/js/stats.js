@@ -78,12 +78,14 @@ export function insights(list) {
 }
 
 export function toCSV(list, setName) {
-  const head = ["data", "set", "minha_lenda", "lenda_oponente", "versao", "evento", "formato", "placar", "resultado", "comecei", "notas"];
+  // "tipo": vazio = partida jogada; ID (empate combinado) ou BYE (sem oponente), rodadas de evento sem jogo
+  const head = ["data", "set", "minha_lenda", "lenda_oponente", "versao", "evento", "formato", "placar", "resultado", "comecei", "notas", "tipo", "rodada"];
   const esc = (v) => { const s = String(v ?? ""); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const rows = list.map((m) => [
     new Date(m.playedAt).toISOString().slice(0, 16).replace("T", " "),
-    setName(m.set), m.my, m.opp, m.version, m.event && m.event.type, m.format === "bo3" ? "Bo3" : "Bo1",
-    score(m), { W: "Vitória", L: "Derrota", D: "Empate" }[m.result], turnLabel(m), m.note,
+    setName(m.set), m.my, m.opp, m.version, m.event && m.event.type, m.kind ? "" : m.format === "bo3" ? "Bo3" : "Bo1",
+    m.kind ? "" : score(m), { W: "Vitória", L: "Derrota", D: "Empate" }[m.result], turnLabel(m), m.note,
+    m.kind === "id" ? "ID" : m.kind === "bye" ? "BYE" : "", (m.event && m.event.round) || "",
   ].map(esc).join(","));
   return [head.join(","), ...rows].join("\n");
 }

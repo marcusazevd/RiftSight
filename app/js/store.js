@@ -21,9 +21,16 @@ Partida (schema 2):
   result: "W" | "L" | "D",
   games: [ { n: 1, first: "me"|"opp"|null, result: "W"|"L"|"D"|null,
              myBf: null, oppBf: null, points: null, log: [] } ],
-  note: "", tags: []
+  note: "", tags: [],
+  kind?: "id" | "bye"   // 0.9.5: rodada de evento sem jogo (ID = empate combinado, bye = sem oponente).
+                        // Ausente = partida jogada. ID/bye: games [], format "bo1", score "", opp "" no bye,
+                        // result "D" (ID) ou "W" (bye). Ficam fora de win rate, matchups e battlefields.
 }
 */
+export const KINDS = ["id", "bye"];
+// Partidas jogadas: tudo que vira estatística (win rate, matchups, battlefields, turno, destaques, torneio).
+export const isPlayed = (m) => !m.kind;
+export function played() { return state.matches.filter(isPlayed); }
 
 const listeners = new Set();
 const state = {
@@ -254,17 +261,24 @@ export function normalize(m) {
   if (!isObj(m)) return null;
   const name = (x) => (typeof x === "string" ? x.trim() : "");
   if (m.schema === SCHEMA) {
-    const id = idOrNull(m.id), my = name(m.my), opp = name(m.opp);
-    if (!id || !my || !opp || !["W", "L", "D"].includes(m.result)) return null;
-    const format = m.format === "bo3" ? "bo3" : "bo1";
+    // rodada sem jogo (0.9.5): "id" = empate combinado, "bye" = sem oponente. Ausente (ou valor
+    // desconhecido) = partida jogada, com as regras de sempre.
+    const kind = KINDS.includes(m.kind) ? m.kind : null;
+    const id = idOrNull(m.id), my = name(m.my), opp = kind === "bye" ? "" : name(m.opp);
+    if (!id) return null;
+    if (!kind && (!my || !opp || !["W", "L", "D"].includes(m.result))) return null;
+    const format = !kind && m.format === "bo3" ? "bo3" : "bo1";
     const playedAt = num(m.playedAt) || num(m.createdAt) || Date.now();
-    const games = (Array.isArray(m.games) ? m.games : []).map((g) => (isObj(g) ? g : null)).filter(Boolean).map(cleanGame);
+    const games = kind ? [] : (Array.isArray(m.games) ? m.games : []).map((g) => (isObj(g) ? g : null)).filter(Boolean).map(cleanGame);
     // placar: "2-1"; se vier em outro formato, é recalculado pelos games
-    let sc = typeof m.score === "string" && SCORE_RE.test(m.score) ? m.score : "";
-    if (!sc && format === "bo3") { const w = games.filter((g) => g.result === "W").length, l = games.filter((g) => g.result === "L").length; sc = w + l ? w + "-" + l : ""; }
+    let sc = !kind && typeof m.score === "string" && SCORE_RE.test(m.score) ? m.score : "";
+    if (!sc && !kind && format === "bo3") { const w = games.filter((g) => g.result === "W").length, l = games.filter((g) => g.result === "L").length; sc = w + l ? w + "-" + l : ""; }
     const out = { ...m, id, my, opp, format, playedAt, createdAt: num(m.createdAt) || playedAt, updatedAt: num(m.updatedAt), set: typeof m.set === "string" && m.set ? m.set.slice(0, 16) : setForDate(playedAt),
       deckId: idOrNull(m.deckId), versionId: idOrNull(m.versionId), version: str(m.version), event: cleanEventRef(m.event), score: sc, games,
       note: str(m.note), tags: Array.isArray(m.tags) ? m.tags.filter((t) => typeof t === "string") : [] };
+    // ID vale empate e bye vale vitória no recorde do evento, qualquer que seja o resultado gravado
+    if (kind) { out.kind = kind; out.result = kind === "bye" ? "W" : "D"; delete out.source; delete out.endedBy; }
+    else delete out.kind;
     if ("source" in m && typeof m.source !== "string") delete out.source;
     if ("endedBy" in m && typeof m.endedBy !== "string") delete out.endedBy;
     return out;
