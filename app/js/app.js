@@ -3,7 +3,7 @@ import * as S from "./store.js";
 import { record } from "./stats.js";
 import { $, $$, toast, RUNE, esc, dialog, setBadge } from "./ui.js";
 import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey, readLive, liveLost } from "./core.js";
-import { initRegister, refreshAdd } from "./register.js";
+import { initRegister, refreshAdd, closeBfSheet, leaveAdd } from "./register.js";
 import { initLive, liveBack } from "./live.js";
 import { initViews, refreshMore, moreBack, leaveDeckEditor } from "./views.js";
 import { maybeStartJourney, journeyBack } from "./onboard.js";
@@ -17,7 +17,7 @@ const IC = {
 };
 
 function renderHeader() {
-  const r = record(S.getState().matches);
+  const r = record(S.played());
   $("#rec").innerHTML = r.n ? `<b>${r.w}–${r.l}${r.d ? "–" + r.d : ""}</b>${r.n} partida${r.n > 1 ? "s" : ""}` : `sem partidas`;
 }
 
@@ -43,7 +43,11 @@ function boot() {
     <button data-t="add" class="on">${IC.add}Registrar</button><button data-t="stats">${IC.stats}Estatísticas</button>
     <button data-t="hist">${IC.hist}Histórico</button><button data-t="more">${IC.more}Mais</button></nav>`);
   // sair do editor de deck pelas abas também pergunta quando há alteração não salva
-  $$("nav button").forEach((b) => (b.onclick = async () => { if (currentView() === "more" && !(await leaveDeckEditor())) return; showView(b.dataset.t); }));
+  $$("nav button").forEach((b) => (b.onclick = async () => { if (currentView() === "more" && !(await leaveDeckEditor())) return; leaveAdd(); showView(b.dataset.t); }));
+  // altura real da navegação: a barra SALVAR fica logo acima dela (e o fim da página reserva as duas)
+  const navH = () => { const n = document.querySelector("nav"); if (n) document.documentElement.style.setProperty("--navh", n.offsetHeight + "px"); };
+  navH(); addEventListener("resize", navH);
+  try { new ResizeObserver(navH).observe(document.querySelector("nav")); } catch (e) {} // a fonte carrega depois e muda a altura
   initRegister(); initLive(); initViews(); initAnalysis();
   // seletor de battlefield (botões): escolhe, desmarca ou adiciona outro
   document.addEventListener("click", async (e) => {
@@ -154,6 +158,7 @@ function androidBridge() {
   try { navigator.vibrate = (p) => { try { window.RBTAndroid.vibrate(JSON.stringify(p)); } catch (e) {} return true; }; } catch (e) {}
   window.__rbtBack = () => {
     if (journeyBack()) return true;
+    if (closeBfSheet()) return true; // folha de battlefields do registro
     const bg = document.querySelector('#dlg [data-v="__cancel"]');
     if (bg) { bg.click(); return true; }
     const open = document.querySelector(".pl:not(.hide)"); if (open) { open.classList.add("hide"); return true; }

@@ -3,7 +3,7 @@ import { DOMAINS, LEGENDS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendInfo, legendColors, dialog, confirmBox, promptBox, toast, RUNE } from "./ui.js";
 import { backupBanner, handleBackupBanner } from "./views.js";
-import { bfPicker, RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownMyBattlefields, knownOppBattlefields, resultFromGames, eventRecord, registerView, showView, currentView, readLive } from "./core.js";
+import { RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownMyBattlefields, resultFromGames, eventRecord, registerView, showView, currentView, readLive, canonBf, bfKey, allBattlefields, KIND_LABEL, recTxt, roundText } from "./core.js";
 
 let F;
 export function blankForm() {
@@ -16,7 +16,7 @@ export function blankForm() {
     editId: null, deckId: dk ? dk.id : null, versionId: dk ? lastVersionId(dk) : null,
     my: dk ? dk.legend : prefs.my || "", opp: "", ver: dk ? "" : prefs.ver || "",
     ctx: ev ? ev.type : freeCtx(), eventId: ev ? ev.id : null, round: null,
-    turn: "", note: "", fmt: prefs.fmt || "bo1", result: "", myBf: "", oppBf: "",
+    turn: "", note: "", fmt: prefs.fmt || "bo1", result: "", myBf: "", oppBf: "", kind: "",
     games: [g0(), g0(), g0()], timeDraw: false,
     date: toLocalInput(Date.now()), dateTouched: false, set: "", setTouched: false, details: false, manual: !!prefs.manual,
   };
@@ -47,10 +47,10 @@ function deckOptions() {
   return `<div class="pg">Meus decks</div>${ds.map((d) => `<div class="po" tabindex="-1" data-deck="${esc(d.id)}" data-n="${esc(d.name + " " + d.legend)}">${avatar(d.legend, 30)}<span class="nm">${esc(d.name)}<span class="st" style="display:block">${esc(d.legend)}</span></span><span class="doms">${domainPair(d.legend, 13)}</span></div>`).join("")}<div class="pg">Só a lenda</div>`;
 }
 export const myLabel = (dk) => (dk ? "Seu deck" : S.getState().decks.some((d) => !d.archived) ? "Seu deck ou lenda" : "Sua lenda");
-export function pickerHTML(side, value, label, withDecks, deckId = null) {
+export function pickerHTML(side, value, label, withDecks, deckId = null, empty = "Escolher") {
   const dk = withDecks && deckId ? S.deck(deckId) : null;
   return `<div class="lbl">${label}</div>
-    <button type="button" class="pb" aria-haspopup="listbox">${avatar(value, 66)}<span class="pt">${dk ? esc(dk.name) : value ? esc(value) : "Escolher"}</span><span class="doms">${value ? domainPair(value, 14) : ""}</span></button>
+    <button type="button" class="pb" aria-haspopup="listbox" aria-label="${esc(label)}: ${esc(dk ? dk.name : value || "escolher")}">${avatar(value, 66)}<span class="pt">${dk ? esc(dk.name) : value ? esc(value) : esc(empty)}</span><span class="doms">${value ? domainPair(value, 14) : ""}</span></button>
     <div class="pl hide" role="listbox"><input class="ps" placeholder="Buscar…" autocomplete="off" aria-label="Buscar">${withDecks ? deckOptions() : ""}${legendOptions()}<div class="po pn" data-n="__new">＋ Outra lenda…</div></div>`;
 }
 export function paintMatchup(mu, my, opp) {
@@ -182,7 +182,7 @@ function eventBanner() {
 
 // faixa de status: recorde, últimas 5 e sequência
 function statusStrip() {
-  const ms = S.getState().matches; if (!ms.length) return "";
+  const ms = S.played(); if (!ms.length) return "";
   const w = ms.filter((m) => m.result === "W").length, l = ms.filter((m) => m.result === "L").length, d = ms.length - w - l;
   const last = ms.slice(-5);
   let n = 0; const r = ms[ms.length - 1].result; for (let i = ms.length - 1; i >= 0 && ms[i].result === r; i--) n++;
@@ -190,8 +190,6 @@ function statusStrip() {
     <div class="ss-last">${last.map((m) => `<span class="chip ${m.result}">${{ W: "V", L: "D", D: "E" }[m.result]}</span>`).join("")}${r === "W" && n > 1 ? `<span class="ss-streak">x${n}</span>` : ""}</div></div>`;
 }
 // ---------- render ----------
-function myBfOptions() { const dk = F.deckId ? S.deck(F.deckId) : null; const own = dk ? (dk.battlefields || []).filter(Boolean) : []; return own.length ? own : knownMyBattlefields(); }
-
 // Bo3: os games valem em ordem, sem buraco, e o match acaba quando alguém chega a 2.
 // Devolve os games que contam (até a decisão) e se há game marcado depois de um em branco.
 function bo3Games() {
@@ -205,6 +203,18 @@ function bo3Games() {
   return { used, hole };
 }
 const clearGame = (g) => { g.result = ""; g.first = ""; };
+const pressed = (on) => `class="${on ? "on" : ""}" aria-pressed="${on ? "true" : "false"}"`;
+
+// ---------- battlefields do game (0.9.5: um botão por game, que abre a folha) ----------
+// "b1" = a partida única; 0, 1, 2 = games do Bo3.
+const bfOf = (i) => (i === "b1" ? F : F.games[+i]);
+const gameName = (i) => (i === "b1" ? "" : ` do game ${+i + 1}`);
+function bfBtn(i) {
+  const g = bfOf(i), mine = canonBf(g.myBf), theirs = canonBf(g.oppBf);
+  if (!mine && !theirs) return `<button type="button" class="gbf empty" data-bfg="${i}" aria-haspopup="dialog"><span>+ battlefields${gameName(i)}</span><i aria-hidden="true">▾</i></button>`;
+  return `<button type="button" class="gbf" data-bfg="${i}" aria-haspopup="dialog" aria-label="Battlefields${gameName(i)}: seu ${esc(mine || "não marcado")}, do oponente ${esc(theirs || "não marcado")}. Alterar">
+    <span class="bm">${esc(mine || "—")}</span><span class="bx" aria-hidden="true">×</span><span class="bt">${esc(theirs || "—")}</span><i aria-hidden="true">▾</i></button>`;
+}
 
 function gamesHTML() {
   const rows = [];
@@ -215,15 +225,80 @@ function gamesHTML() {
   const n = showG3 ? 3 : 2;
   for (let i = 0; i < n; i++) {
     const x = g[i];
-    rows.push(`<div class="gm" data-g="${i}"><div class="gh"><b>Game ${i + 1}</b>
-      <div class="tg" role="group" aria-label="Quem começou o game ${i + 1}"><button type="button" data-f="me" class="${x.first === "me" ? "on" : ""}">Eu comecei</button><button type="button" data-f="opp" class="${x.first === "opp" ? "on" : ""}">Oponente</button></div></div>
-      <div class="seg c2"><button type="button" class="W ${x.result === "W" ? "on" : ""}" data-gr="W">Ganhei</button><button type="button" class="L ${x.result === "L" ? "on" : ""}" data-gr="L">Perdi</button></div>
-      ${F.details ? `<div class="bfrow"><label>Meu battlefield</label>${bfPicker("gmy" + i, x.myBf, myBfOptions(), g.filter((_, k) => k !== i).map((y) => y.myBf).filter(Boolean))}<label>Do oponente</label>${bfPicker("gop" + i, x.oppBf, knownOppBattlefields(), g.filter((_, k) => k !== i).map((y) => y.oppBf).filter(Boolean))}</div>` : ""}</div>`);
+    rows.push(`<div class="gm" data-g="${i}"><div class="gline"><span class="gn" aria-hidden="true">G${i + 1}</span>
+      <div class="tg gf" role="group" aria-label="Quem começou o game ${i + 1}"><button type="button" data-f="me" ${pressed(x.first === "me")}>Eu</button><button type="button" data-f="opp" ${pressed(x.first === "opp")}>Ele</button></div>
+      <div class="gr" role="group" aria-label="Resultado do game ${i + 1}"><button type="button" data-gr="W" ${pressed(x.result === "W").replace('class="', 'class="W ')}>Ganhei</button><button type="button" data-gr="L" ${pressed(x.result === "L").replace('class="', 'class="L ')}>Perdi</button></div></div>
+      ${bfBtn(i)}</div>`);
   }
-  const r = resultFromGames(g.slice(0, n));
   const tie = split && !g[2].result;
-  return rows.join("") + (tie ? `<label class="ck"><input type="checkbox" id="f-tdraw"${F.timeDraw ? " checked" : ""}> Terminou empatado (tempo)</label>` : "") +
-    `<div class="score">Placar: <b>${r.w}–${r.l}</b>${r.w + r.l ? ` · <span class="${r.result.toLowerCase()}">${F.timeDraw && tie ? "Empate" : r.w === 2 ? "Vitória" : r.l === 2 ? "Derrota" : "em andamento"}</span>` : ""}</div>`;
+  return rows.join("") + (tie ? `<label class="ck tdraw"><input type="checkbox" id="f-tdraw"${F.timeDraw ? " checked" : ""}> Terminou empatado (tempo)</label>` : "");
+}
+// Partida única: quem começou e o resultado na mesma linha, battlefields embaixo.
+function bo1HTML() {
+  return `<div class="gm one" data-g="b1"><div class="gline">
+    <div class="tg gf" role="group" aria-label="Quem começou"><button type="button" data-t1="me" ${pressed(F.turn === "me")}>Eu</button><button type="button" data-t1="opp" ${pressed(F.turn === "opp")}>Ele</button></div>
+    <div class="gr c3" id="f-res" role="group" aria-label="Resultado">${["W", "L", "D"].map((k) => `<button type="button" data-r="${k}" ${pressed(F.result === k).replace('class="', `class="${k} `)}>${RES[k]}</button>`).join("")}</div></div>
+    ${bfBtn("b1")}</div>`;
+}
+
+// ---------- ID e bye (rodada de evento sem jogo) ----------
+const KINDS_UI = [["", "JOGUEI", "registrar games"], ["id", "ID", "empate combinado"], ["bye", "BYE", "sem oponente"]];
+function kindHTML() {
+  return `<div class="rk-q" id="rk-q">Como foi a rodada?</div><div class="rk" role="group" aria-labelledby="rk-q">${KINDS_UI.map(([k, t, sub]) =>
+    `<button type="button" data-kind="${k}" ${pressed(F.kind === k)}><b>${t}</b><small>${sub}</small></button>`).join("")}</div>`;
+}
+// Recorde do evento como fica depois de salvar (descontando a própria partida, quando é edição).
+function projectedRecord(ev) {
+  const r = ev ? eventRecord(ev) : { w: 0, l: 0, d: 0 };
+  let { w, l, d } = r;
+  const old = F.editId ? S.getState().matches.find((m) => m.id === F.editId) : null;
+  if (old && ev && old.event && old.event.eventId === ev.id) { if (old.result === "W") w--; else if (old.result === "L") l--; else d--; }
+  if (F.kind === "bye") w++; else d++;
+  return recTxt({ w, l, d });
+}
+function roundsHTML(ev) {
+  const ms = eventRecord(ev).matches.slice().sort((a, b) => (a.event.round || 0) - (b.event.round || 0));
+  if (!ms.length) return "";
+  return `<section class="rounds" aria-label="Rodadas do evento"><div class="rd-h">RODADAS</div>${ms.map((m) => `<div class="rd${m.kind ? " k" : ""}"><span class="rd-n">R${esc(m.event.round || "?")}</span><span class="rd-r ${m.kind ? "k" : esc(m.result)}">${m.kind ? KIND_LABEL[m.kind] : { W: "V", L: "D", D: "E" }[m.result]}</span><span class="rd-t">${esc(roundText(m))}</span></div>`).join("")}</section>`;
+}
+function kindBody(ev) {
+  return `${F.kind === "id" ? `<div class="kopp"><div class="pick" id="opp" data-side="opp">${pickerHTML("opp", F.opp, "Contra quem? (opcional)", false, null, "Escolher a lenda")}</div>${F.opp ? '<button type="button" class="x" id="f-noopp" aria-label="Tirar o oponente">✕</button>' : ""}</div>` : ""}
+    <div class="kinfo"><span>${F.kind === "bye" ? "Conta como vitória no recorde do evento" : "Conta no recorde do evento"}: <b>${projectedRecord(ev)}</b></span><span class="m">Fica fora do win rate, dos matchups e dos battlefields.</span></div>
+    ${ev ? roundsHTML(ev) : ""}`;
+}
+
+// ---------- barra SALVAR ----------
+// Diz se dá para salvar, com o placar e o resultado (ou o motivo curto quando falta algo).
+function formStatus() {
+  const verb = F.editId ? "ATUALIZAR" : "SALVAR";
+  if (F.kind) {
+    const ev = F.eventId ? S.evt(F.eventId) : null, rd = F.round || (ev ? nextRound(ev.id) : null);
+    return { ok: true, main: verb + " " + KIND_LABEL[F.kind], sub: rd ? "R" + rd : "" };
+  }
+  if (!F.my) return { ok: false, main: verb, why: "falta o seu deck" };
+  if (!F.opp) return { ok: false, main: verb, why: "falta o oponente" };
+  if (F.fmt !== "bo3") return F.result ? { ok: true, main: verb, sub: RES[F.result].toUpperCase() } : { ok: false, main: verb, why: "falta o resultado" };
+  const b3 = bo3Games();
+  if (b3.hole) return { ok: false, main: verb, why: `o G${b3.hole.blank} está em branco` };
+  const r = resultFromGames(b3.used), sc = `${r.w}–${r.l}`;
+  if (r.w === 2 || r.l === 2) return { ok: true, main: `${verb} ${sc}`, sub: r.w === 2 ? "VITÓRIA" : "DERROTA" };
+  if (F.timeDraw && r.w === 1 && r.l === 1) return { ok: true, main: `${verb} ${sc}`, sub: "EMPATE" };
+  if (F.timeResult) return { ok: true, main: `${verb} ${sc}`, sub: RES[F.timeResult].toUpperCase() };
+  return { ok: false, main: verb, why: `falta o G${b3.used.length + 1}` };
+}
+// Incompleto: aparência de desabilitado e o motivo no próprio texto ("SALVAR · falta o oponente"), mas o
+// botão continua tocável para abrir a explicação completa do que falta (mesmas mensagens de antes).
+function saveBarHTML() {
+  const st = formStatus();
+  return `<div class="savebar" id="f-savebar"><button type="button" class="go sbtn${st.ok ? "" : " off"}" id="f-save" data-ok="${st.ok ? 1 : 0}"><span class="sb-m">${esc(st.main)}</span>${st.sub ? `<span class="sb-s"> · ${esc(st.sub)}</span>` : ""}${st.why ? `<span class="sb-w"> · ${esc(st.why)}</span>` : ""}</button></div>`;
+}
+function paintBar() { const b = document.getElementById("f-savebar"); if (b) b.outerHTML = saveBarHTML(); }
+
+// "Data, set e notas · hoje · Radiance": a linha recolhida dos detalhes
+function detailsLine(ev) {
+  const d = fromLocalInput(F.date), today = toLocalDate(d) === toLocalDate(Date.now());
+  const sum = [ev ? "" : F.ctx, today ? "hoje" : fmtDate(d), S.sets().find((x) => x.id === F.set)?.name || "", F.note ? "com nota" : ""].filter(Boolean).join(" · ");
+  return `<button type="button" class="more-t det" id="f-more" aria-expanded="${!!F.details}" aria-controls="f-det"><span class="dl">${ev ? "Data, set e notas" : "Tipo, data, set e notas"} · <span class="ds">${esc(sum)}</span></span><i aria-hidden="true">${F.details ? "▾" : "▸"}</i></button>`;
 }
 
 function render() {
@@ -235,29 +310,31 @@ function render() {
   const bo3 = F.fmt === "bo3";
   const dk = F.deckId ? S.deck(F.deckId) : null;
   const ev = F.eventId ? S.evt(F.eventId) : null;
+  // ID/bye: só com evento (aberto, ou o da partida que está sendo editada)
+  const showKind = !!((ev && (ev.status === "open" || F.editId)) || F.kind);
+  if (!showKind) F.kind = "";
+  const open = !!(F.editId || F.manual);
   const lv = readLive(), liveOn = !!(lv && lv.phase !== "setup");
   el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}${savedStrip()}
   ${F.editId ? "" : `<div class="herorow"><button class="go big-go" id="go-live" type="button"><span>NOVA PARTIDA<small>Contador de pontos${F.eventId && S.evt(F.eventId) ? " · rodada " + nextRound(F.eventId) : ""}</small></span></button>${S.openEvent() ? "" : `<button class="evchip" type="button" id="ev-start"><b>＋</b>EVENTO</button>`}</div>
-  <button class="manual-t${F.manual ? " open" : ""}" id="f-manual" type="button" aria-expanded="${!!F.manual}"><span>Registrar partida já jogada</span><i>${F.manual ? "▴" : "▾"}</i></button>`}
-  <div class="card mcard${F.editId || F.manual ? "" : " hide"}">
-    ${F.editId ? '<h2>Editar partida</h2>' : ""}
-    <div class="mu compact"><div class="pick" id="my" data-side="my">${pickerHTML("my", F.my, myLabel(dk), true, F.deckId)}</div><div class="vs">VS</div><div class="pick" id="opp" data-side="opp">${pickerHTML("opp", F.opp, "Oponente", false)}</div></div>
-    <div class="optrow"><span class="ol">Versão</span><div class="verchip">${versionField("f-ver", F.deckId, F.versionId, F.ver, "f-vers")}</div></div>
-    <div class="optrow"><span class="ol">Formato</span><div class="tg" role="group" aria-label="Formato"><button type="button" data-fmt="bo1" class="${!bo3 ? "on" : ""}">Única</button><button type="button" data-fmt="bo3" class="${bo3 ? "on" : ""}">Bo3</button></div>
-    </div>${bo3 ? "" : `<div class="optrow"><span class="ol">Começou</span><div class="tg" role="group" aria-label="Quem começou"><button type="button" data-t1="me" class="${F.turn === "me" ? "on" : ""}">Eu</button><button type="button" data-t1="opp" class="${F.turn === "opp" ? "on" : ""}">Oponente</button></div></div>`}
-    ${bo3 ? `<div id="f-games">${gamesHTML()}</div>` : `
-      <div class="seg c3" id="f-res" role="group" aria-label="Resultado">${["W", "L", "D"].map((k) => `<button type="button" class="${k} ${F.result === k ? "on" : ""}" data-r="${k}">${RES[k]}</button>`).join("")}</div>
-      ${F.details ? `<div class="bfrow"><label>Meu battlefield</label>${bfPicker("f-mybf", F.myBf, myBfOptions())}<label>Do oponente</label>${bfPicker("f-opbf", F.oppBf, knownOppBattlefields())}</div>` : ""}`}
-    <button type="button" class="more-t" id="f-more" aria-expanded="${F.details}">${F.details ? "Menos detalhes ▴" : "Mais detalhes ▾"} <span class="m">${esc(ev ? ev.name + " · rodada " + (F.round || nextRound(ev.id)) : F.ctx)} · ${esc(S.sets().find((s) => s.id === F.set)?.name || "")} · ${fmtDate(fromLocalInput(F.date))}</span></button>
-    <div class="${F.details ? "" : "hide"}">
+  <button class="manual-t${F.manual ? " open" : ""}" id="f-manual" type="button" aria-expanded="${!!F.manual}"><span>${S.openEvent() ? "Registrar rodada já jogada, ID ou bye" : "Registrar partida já jogada"}</span><i>${F.manual ? "▴" : "▾"}</i></button>`}
+  <div class="card mcard${open ? "" : " hide"}${F.kind ? " kind" : ""}" id="f-card">
+    ${F.editId ? `<h2>${F.kind ? "Editar rodada" : "Editar partida"}</h2>` : ""}
+    ${showKind ? kindHTML() : ""}
+    ${F.kind ? kindBody(ev) : `<div class="mu compact"><div class="pick" id="my" data-side="my">${pickerHTML("my", F.my, myLabel(dk), true, F.deckId, myLabel(dk))}</div><div class="vs">VS</div><div class="pick" id="opp" data-side="opp">${pickerHTML("opp", F.opp, "Oponente", false, null, "Oponente")}</div></div>
+    <div class="frow"><div class="tg fmt2" role="group" aria-label="Formato"><button type="button" data-fmt="bo1" ${pressed(!bo3)}>Única</button><button type="button" data-fmt="bo3" ${pressed(bo3)}>Bo3</button></div>
+      <div class="verchip"><label class="sr" for="f-ver">Versão</label>${versionField("f-ver", F.deckId, F.versionId, F.ver, "f-vers")}</div></div>
+    ${bo3 ? `<div id="f-games">${gamesHTML()}</div>` : bo1HTML()}`}
+    ${detailsLine(ev)}
+    <div id="f-det" class="${F.details ? "" : "hide"}">
       ${ev ? "" : `<label for="f-ctx">Tipo de jogo</label><select id="f-ctx">${EVENT_TYPES.map((c) => `<option${c === F.ctx ? " selected" : ""}>${c}</option>`).join("")}</select>`}
       <div class="row"><div><label for="f-date">Data</label><input id="f-date" type="datetime-local" value="${esc(F.date)}"></div>
       <div><label for="f-set">Set</label><select id="f-set">${S.sets().map((s) => `<option value="${esc(s.id)}"${s.id === F.set ? " selected" : ""}>${esc(s.name)}</option>`).join("")}</select></div></div>
       <label for="f-note">Notas</label><textarea id="f-note" rows="2" placeholder="O que funcionou e o que deu errado">${esc(F.note)}</textarea>
     </div>
-    <button class="go" id="f-save" type="button">${F.editId ? "ATUALIZAR PARTIDA" : "SALVAR"}</button>
     ${F.editId ? '<button class="btn full" id="f-cancel" type="button" style="margin-top:10px">Cancelar edição</button>' : ""}
-  </div>${F.editId ? "" : backupBanner()}`;
+  </div>${open ? saveBarHTML() : ""}${F.editId ? "" : backupBanner()}`;
+  document.body.classList.toggle("sbar-on", open);
   paintMatchup($(".mu", el), F.my, F.opp);
   F._fresh = false;
 }
@@ -270,12 +347,120 @@ function collect() {
   if (v("f-note") !== null) F.note = v("f-note").trim();
   if (v("f-date") !== null) { const d = v("f-date"); if (d && d !== F.date) { F.date = d; F.dateTouched = true; } }
   if (v("f-set") !== null) F.set = v("f-set");
-  if (v("f-mybf") !== null) F.myBf = v("f-mybf").trim();
-  if (v("f-opbf") !== null) F.oppBf = v("f-opbf").trim();
-  for (let i = 0; i < 3; i++) {
-    if (v("gmy" + i) !== null) F.games[i].myBf = v("gmy" + i).trim();
-    if (v("gop" + i) !== null) F.games[i].oppBf = v("gop" + i).trim();
+}
+
+// ---------- folha de battlefields de um game ----------
+// Escolher aplica na hora (o botão do game já mostra); ✕, PRONTO, voltar do Android e toque fora só fecham.
+let SH = null; // { i }
+function usedIn(i, key) {
+  if (i === "b1") return [];
+  return F.games.map((g, k) => ({ name: canonBf(g[key]), g: k + 1 })).filter((x, k) => k !== +i && x.name);
+}
+// Sugestões do oponente: só battlefields que oponentes já usaram; primeiro os da mesma lenda.
+function oppSuggest(opp) {
+  const c = new Map(), add = (b, w) => { if (b) { const k = canonBf(b); c.set(k, (c.get(k) || 0) + w); } };
+  S.played().forEach((m) => (m.games || []).forEach((g) => add(g.oppBf, opp && m.opp === opp ? 100 : 1)));
+  return [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR")).map((x) => x[0]);
+}
+function bfOpt(side, name, cur, used, big) {
+  const u = used.find((x) => x.name === name), on = name === cur;
+  if (u && !on) return `<button type="button" class="bo used${big ? " tall" : ""}" disabled aria-label="${esc(name)}, já usado no game ${u.g}"><s>${esc(name)}</s><small>usado no G${u.g}</small></button>`;
+  return `<button type="button" class="bo${big ? " tall" : ""}${on ? " on" : ""}" data-side="${side}" data-bf="${esc(name)}" aria-pressed="${on}">${esc(name)}</button>`;
+}
+function bfSearchHTML(side, label) {
+  return `<label class="bs-s"><span aria-hidden="true">⌕</span><input type="search" class="bs-q" data-side="${side}" placeholder="Buscar outro battlefield" aria-label="${label}" autocomplete="off" autocapitalize="off" spellcheck="false"></label><div class="bs-res" data-side="${side}" role="group" aria-label="Resultados da busca"></div>`;
+}
+function sheetHTML(i) {
+  const g = bfOf(i), dk = F.deckId ? S.deck(F.deckId) : null;
+  const own = dk ? [...new Set((dk.battlefields || []).filter(Boolean).map(canonBf))] : [];
+  const mine = canonBf(g.myBf), theirs = canonBf(g.oppBf), uMy = usedIn(i, "myBf"), uOp = usedIn(i, "oppBf");
+  let my;
+  if (own.length) my = `<div class="bs-l">Seu battlefield <span>· ${own.length === 1 ? "o do deck" : `os ${own.length} do deck`} ${esc(dk.name)}</span></div>
+      <div class="bs-grid">${own.map((n) => bfOpt("my", n, mine, uMy, true)).join("")}${mine && !own.includes(mine) ? bfOpt("my", mine, mine, uMy, true) : ""}</div>`;
+  else {
+    // deck sem battlefields cadastrados (ou só a lenda): os que você já usou + busca
+    const sug = [...new Set([mine, ...uMy.map((x) => x.name), ...knownMyBattlefields()].filter(Boolean))].slice(0, 6 + uMy.length);
+    my = `<div class="bs-l">Seu battlefield <span>· ${dk ? "o deck não tem battlefields cadastrados" : "busque ou escolha"}</span></div>
+      ${sug.length ? `<div class="bs-chips">${sug.map((n) => bfOpt("my", n, mine, uMy)).join("")}</div>` : ""}${bfSearchHTML("my", "Buscar o seu battlefield")}`;
   }
+  const sugOp = [...new Set([...uOp.map((x) => x.name), theirs, ...oppSuggest(F.opp)].filter(Boolean))].slice(0, 6 + uOp.length);
+  const title = i === "b1" ? "BATTLEFIELDS" : `GAME ${+i + 1} · BATTLEFIELDS`;
+  return `<div class="bs-scrim" data-close="1"></div>
+    <section class="bs" role="dialog" aria-modal="true" aria-labelledby="bs-t">
+      <div class="bs-h"><span class="bs-t" id="bs-t">${title}</span><button type="button" class="bs-x" data-close="1" aria-label="Fechar">✕</button></div>
+      <div class="bs-p">${my}</div>
+      <div class="bs-p"><div class="bs-l">Do oponente${F.opp ? ` <span>· ${esc(F.opp)}</span>` : ""}</div>
+        ${sugOp.length ? `<div class="bs-chips">${sugOp.map((n) => bfOpt("opp", n, theirs, uOp)).join("")}</div>` : ""}
+        ${bfSearchHTML("opp", "Buscar battlefield do oponente")}
+        <p class="bs-hint">${sugOp.length ? `Sugestões: os que oponentes já usaram contra você${F.opp ? ` (primeiro os de ${esc(F.opp)})` : ""}.` : "Ainda não há battlefields de oponentes registrados: use a busca."}</p></div>
+      <div class="bs-a"><button type="button" class="btn bs-none" data-none="1">Sem battlefield</button><button type="button" class="go bs-ok" data-close="1">PRONTO</button></div>
+    </section>`;
+}
+function searchResults(box, side) {
+  const q = box.querySelector(`.bs-q[data-side="${side}"]`), res = box.querySelector(`.bs-res[data-side="${side}"]`);
+  const k = bfKey(q.value), typed = q.value.trim();
+  if (!k) { res.innerHTML = ""; return; }
+  const g = bfOf(SH.i), cur = canonBf(side === "my" ? g.myBf : g.oppBf), used = usedIn(SH.i, side === "my" ? "myBf" : "oppBf");
+  const hits = allBattlefields().filter((b) => bfKey(b.name).includes(k)).slice(0, 8);
+  const exact = hits.some((b) => bfKey(b.name) === k);
+  res.innerHTML = hits.map((b) => bfOpt(side, b.name, cur, used)).join("") + (exact ? "" : `<button type="button" class="bo add" data-side="${side}" data-bf="${esc(typed)}">＋ Usar "${esc(typed)}"</button>`);
+}
+function paintGame(i) {
+  if (i === "b1") { const b = document.querySelector('#add [data-bfg="b1"]'); if (b) b.outerHTML = bfBtn("b1"); }
+  else { const box = $("#f-games"); if (box) box.innerHTML = gamesHTML(); }
+}
+function sheetKeys(e) {
+  const box = document.getElementById("bfsheet"); if (!box) return;
+  if (e.key === "Escape") { e.preventDefault(); closeBfSheet(); return; }
+  if (e.key !== "Tab") return;
+  // foco preso na folha
+  const f = [...box.querySelectorAll("button:not([disabled]), input")].filter((x) => x.offsetParent !== null);
+  if (!f.length) return;
+  const a = f[0], z = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+  else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+  else if (!box.contains(document.activeElement)) { e.preventDefault(); a.focus(); }
+}
+function drawSheet(focusSel) {
+  const box = document.getElementById("bfsheet"); if (!box || !SH) return;
+  box.innerHTML = sheetHTML(SH.i);
+  const f = (focusSel && box.querySelector(focusSel)) || box.querySelector(".bo:not([disabled])") || box.querySelector(".bs-x");
+  if (f) f.focus({ preventScroll: true });
+}
+function openBfSheet(i) {
+  closeBfSheet(false);
+  collect();
+  SH = { i };
+  const box = document.createElement("div"); box.id = "bfsheet"; box.className = "anim"; document.body.appendChild(box);
+  setTimeout(() => box.classList.remove("anim"), 250); // só a abertura anima; redesenhar ao escolher não pisca
+  document.body.classList.add("sheet-on");
+  drawSheet();
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-close], [data-none], [data-bf]"); if (!b || b.disabled) return;
+    if (b.dataset.close) return closeBfSheet();
+    const g = bfOf(SH.i);
+    if (b.dataset.none) { g.myBf = ""; g.oppBf = ""; paintGame(SH.i); return closeBfSheet(); }
+    const key = b.dataset.side === "my" ? "myBf" : "oppBf", name = canonBf(b.dataset.bf);
+    g[key] = canonBf(g[key]) === name ? "" : name; // tocar no escolhido desmarca
+    paintGame(SH.i);
+    drawSheet(`[data-side="${b.dataset.side}"][data-bf="${CSS.escape(name)}"]`);
+  });
+  box.addEventListener("input", (e) => { if (e.target.classList.contains("bs-q")) searchResults(box, e.target.dataset.side); });
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.classList.contains("bs-q")) { e.preventDefault(); const first = box.querySelector(`.bs-res[data-side="${e.target.dataset.side}"] button:not([disabled])`); if (first) first.click(); }
+  });
+  document.addEventListener("keydown", sheetKeys, true);
+}
+// Fecha a folha (devolve true se estava aberta). Usado também pelo voltar do Android.
+export function closeBfSheet(refocus = true) {
+  const box = document.getElementById("bfsheet");
+  if (!box) { SH = null; return false; }
+  const i = SH && SH.i;
+  box.remove(); SH = null;
+  document.body.classList.remove("sheet-on");
+  document.removeEventListener("keydown", sheetKeys, true);
+  if (refocus && i !== null && i !== undefined) { const t = document.querySelector(`#add [data-bfg="${i}"]`); if (t) t.focus({ preventScroll: true }); }
+  return true;
 }
 
 function bind() {
@@ -294,13 +479,15 @@ function bind() {
     if (b.id === "go-live") return showView("live", { setup: true });
     if (b.id === "go-resume") return showView("live");
     if (b.id === "ev-start") { const ev = await startEvent(); if (ev) { collect(); F.eventId = ev.id; F.ctx = ev.type; if (ev.deckId) { const d = S.deck(ev.deckId); F.deckId = d.id; F.my = d.legend; F.versionId = ev.versionId; } render(); } return; }
-    if (b.id === "ev-close") { const ev = S.openEvent(); if (ev && (await closeEvent(ev))) { F.eventId = null; F.ctx = freeCtx(); render(); } return; }
+    if (b.id === "ev-close") { const ev = S.openEvent(); if (ev && (await closeEvent(ev))) { F.eventId = null; F.ctx = freeCtx(); F.kind = ""; render(); } return; }
+    if (b.dataset.kind !== undefined) { collect(); F.kind = b.dataset.kind; render(); return; }
+    if (b.id === "f-noopp") { collect(); F.opp = ""; render(); return; }
     if (b.dataset.fmt) { collect(); F.fmt = b.dataset.fmt; F.result = ""; render(); return; }
-    if (b.dataset.t1) { F.turn = F.turn === b.dataset.t1 ? "" : b.dataset.t1; $$("[data-t1]", el).forEach((x) => x.classList.toggle("on", x.dataset.t1 === F.turn)); return; }
-    if (b.dataset.r) { F.result = b.dataset.r; $$("#f-res button", el).forEach((x) => x.classList.toggle("on", x === b)); return; }
-    if (b.closest(".bfp")) return; // seletor de battlefield: tratado no app.js, sem redesenhar aqui
+    if (b.dataset.bfg !== undefined) return openBfSheet(b.dataset.bfg === "b1" ? "b1" : +b.dataset.bfg);
+    if (b.dataset.t1) { F.turn = F.turn === b.dataset.t1 ? "" : b.dataset.t1; $$("[data-t1]", el).forEach((x) => { x.classList.toggle("on", x.dataset.t1 === F.turn); x.setAttribute("aria-pressed", x.dataset.t1 === F.turn); }); paintBar(); return; }
+    if (b.dataset.r) { F.result = F.result === b.dataset.r ? "" : b.dataset.r; $$("#f-res button", el).forEach((x) => { x.classList.toggle("on", x.dataset.r === F.result); x.setAttribute("aria-pressed", x.dataset.r === F.result); }); paintBar(); return; }
     const gm = b.closest(".gm");
-    if (gm) {
+    if (gm && gm.dataset.g !== "b1") {
       collect();
       const i = +gm.dataset.g, g = F.games[i];
       if (b.dataset.f) g.first = g.first === b.dataset.f ? "" : b.dataset.f;
@@ -316,9 +503,15 @@ function bind() {
         if (nx && !nx.first && g.result && (i === 0 || (a.result && c.result && a.result !== c.result))) nx.first = g.result === "L" ? "me" : "opp";
       }
       $("#f-games").innerHTML = gamesHTML();
+      paintBar();
       return;
     }
-    if (b.id === "f-manual") { collect(); F.manual = !F.manual; prefs.manual = F.manual ? 1 : 0; savePrefs(); render(); return; }
+    if (b.id === "f-manual") {
+      collect(); F.manual = !F.manual; prefs.manual = F.manual ? 1 : 0; savePrefs(); render();
+      // abriu: o formulário inteiro sobe para a área entre o topo e a barra SALVAR
+      if (F.manual) { const t = document.getElementById("f-card"); if (t) t.scrollIntoView({ block: "start" }); }
+      return;
+    }
     if (b.id === "f-more") { collect(); F.details = !F.details; render(); return; }
     if (b.id === "f-save") return save();
     if (b.id === "sv-undo") return undoSaved();
@@ -326,7 +519,7 @@ function bind() {
   });
   el.addEventListener("change", async (e) => {
     if (e.target.id === "f-ver" && e.target.value === "__new") { collect(); const id = await newVersion(F.deckId); if (id) F.versionId = id; render(); return; }
-    if (e.target.id === "f-tdraw") { F.timeDraw = e.target.checked; collect(); if (F.timeDraw) F.games[2] = { ...F.games[2], result: "", first: "" }; $("#f-games").innerHTML = gamesHTML(); return; }
+    if (e.target.id === "f-tdraw") { F.timeDraw = e.target.checked; collect(); if (F.timeDraw) F.games[2] = { ...F.games[2], result: "", first: "" }; $("#f-games").innerHTML = gamesHTML(); paintBar(); return; }
     if (e.target.id === "f-date") { collect(); if (!F.setTouched) render(); }
     if (e.target.id === "f-set") { F.set = e.target.value; F.setTouched = true; }
   });
@@ -337,6 +530,7 @@ let saving = false;
 async function save() {
   if (saving) return;
   collect();
+  if (F.kind) return saveKind();
   const bo3 = F.fmt === "bo3";
   let games, result, score = "";
   {
@@ -374,21 +568,42 @@ async function save() {
   if (!F.my || !F.opp) { await dialog({ title: "Falta pouco", body: "<p>Escolha o seu deck ou lenda e a lenda do oponente.</p>" }); return; }
   const old = F.editId ? S.getState().matches.find((m) => m.id === F.editId) : null;
   if (old) games = games.map((g, i) => ({ ...(old.games[i] || {}), ...g, points: (old.games[i] || {}).points || null, log: (old.games[i] || {}).log || [] }));
+  const m = baseMatch(old);
+  Object.assign(m, { format: F.fmt, score, result, games });
+  delete m.kind; // ID/bye editado e trocado para "joguei" vira partida normal
+  prefs.fmt = F.fmt;
+  await commit(m, old);
+}
+// Campos comuns de partida jogada, ID e bye.
+function baseMatch(old) {
   const dk = F.deckId ? S.deck(F.deckId) : null;
   // deck apagado: a partida mantém o vínculo e o nome da versão que já tinha
   const keepDeck = !dk && old && old.deckId && F.deckId === old.deckId;
   const playedAt = F.dateTouched || F.editId ? fromLocalInput(F.date) : Date.now();
   const ev = F.eventId ? S.evt(F.eventId) : null;
   const now = Date.now();
-  const m = {
+  return {
     ...(old || {}), id: old ? old.id : S.newId(), schema: S.SCHEMA, createdAt: old ? old.createdAt : now, playedAt,
     set: (F.setTouched && F.set) || S.setForDate(playedAt), my: F.my, opp: F.opp,
     deckId: dk ? dk.id : keepDeck ? old.deckId : null, versionId: dk ? F.versionId : keepDeck ? old.versionId || null : null,
     version: dk ? versionName(dk, F.versionId) : F.ver || (keepDeck ? old.version : ""),
     event: { type: ev ? ev.type : F.ctx, eventId: ev ? ev.id : null, round: ev ? (old && old.event && old.event.round) || nextRound(ev.id) : null },
-    format: F.fmt, score, result, games, note: F.note, tags: (old && old.tags) || [],
+    note: F.note, tags: (old && old.tags) || [],
   };
-  prefs.my = F.my; prefs.deckId = F.deckId; prefs.ver = F.ver; prefs.fmt = F.fmt;
+}
+// ID (empate combinado, oponente opcional) e bye (sem oponente): ocupam a rodada, sem games.
+async function saveKind() {
+  const old = F.editId ? S.getState().matches.find((m) => m.id === F.editId) : null;
+  const m = baseMatch(old);
+  // evento apagado depois: a rodada guarda o número que tinha
+  if (!m.event.eventId && old && old.event) m.event = { ...m.event, eventId: old.event.eventId || null, round: old.event.round || null };
+  Object.assign(m, { kind: F.kind, opp: F.kind === "id" ? F.opp || "" : "", format: "bo1", score: "", result: F.kind === "bye" ? "W" : "D", games: [] });
+  delete m.source; delete m.endedBy;
+  await commit(m, old);
+}
+async function commit(m, old) {
+  const ev = m.event.eventId ? S.evt(m.event.eventId) : null;
+  prefs.my = F.my; prefs.deckId = F.deckId; prefs.ver = F.ver;
   if (!ev && !old) prefs.ctxOut = F.ctx; // o tipo escolhido fora de evento é lembrado à parte do tipo do evento
   savePrefs();
   saving = true;
@@ -398,9 +613,9 @@ async function save() {
   const wasEdit = !!old;
   // foto do formulário como estava ao salvar: o Desfazer devolve exatamente isto
   const snap = JSON.parse(JSON.stringify(F));
-  // formulário novo, com "Mais detalhes" fechado: a próxima rodada começa limpa
+  // formulário novo, com os detalhes fechados: a próxima rodada começa limpa (e em "joguei")
   F = { ...blankForm(), manual: F.manual, details: false };
-  if (wasEdit) { render(); toast("Partida atualizada"); showView("hist"); return; }
+  if (wasEdit) { render(); toast(m.kind ? "Rodada atualizada" : "Partida atualizada"); showView("hist"); return; }
   savedToast(m, () => { F = { ...snap, _fresh: false }; return true; });
   window.scrollTo(0, 0); // de volta ao topo: banner do evento e recorde à vista
 }
@@ -427,8 +642,10 @@ function paintStrip() {
 export function savedToast(m, restore = null) {
   const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null, g1 = m.games && m.games[0];
   const sc = m.score ? m.score.replace("-", "–") : m.format !== "bo3" && g1 && g1.points ? g1.points.me + "–" + g1.points.opp : "";
-  let html = esc((ev && m.event.round ? "R" + m.event.round + " · " : "") + RES[m.result] + (sc ? " " + sc : "") + " vs " + m.opp);
-  if (ev) { const r = eventRecord(ev); html += ` · <span class="nw">evento ${r.w}–${r.l}${r.d ? "–" + r.d : ""}</span>`; }
+  const rd = ev && m.event.round ? "R" + m.event.round + " · " : "";
+  // ID: "R4 · ID vs Kai'Sa"; bye: "R5 · BYE (vitória)"
+  let html = esc(m.kind === "bye" ? rd + "BYE (vitória)" : m.kind === "id" ? rd + "ID" + (m.opp ? " vs " + m.opp : " (empate combinado)") : rd + RES[m.result] + (sc ? " " + sc : "") + " vs " + m.opp);
+  if (ev) { const r = eventRecord(ev); html += ` · <span class="nw">evento ${recTxt(r)}</span>`; }
   const seq = ++svSeq;
   SV = { seq, id: m.id, m, html, until: Date.now() + UNDO_MS, restore };
   clearTimeout(svT); svT = setTimeout(() => { if (SV && SV.seq === seq) paintStrip(); }, UNDO_MS + 30);
@@ -465,20 +682,22 @@ function formFromMatch(m) {
   }
   const wins = m.games.filter((g) => g.result === "W").length, losses = m.games.filter((g) => g.result === "L").length;
   const byTime = m.format === "bo3" && (m.endedBy === "time" || m.source === "contador") && wins < 2 && losses < 2 && !(m.result === "D" && wins === 1 && losses === 1);
-  return { ...blankForm(), editId: m.id, deckId: m.deckId || null, versionId: m.versionId || null, my: m.my, opp: m.opp, ver: m.deckId && S.deck(m.deckId) ? "" : m.version || "",
+  return { ...blankForm(), editId: m.id, kind: m.kind || "", deckId: m.deckId || null, versionId: m.versionId || null, my: m.my, opp: m.opp, ver: m.deckId && S.deck(m.deckId) ? "" : m.version || "",
     timeResult: byTime ? m.result : null, timeGames: m.games.length, dateTouched: true, _fresh: true,
     ctx: (m.event && m.event.type) || "Outro", eventId: (m.event && m.event.eventId) || null, round: (m.event && m.event.round) || null, turn: (m.games[0] && m.games[0].first) || "",
-    note: m.note || "", fmt: m.format, result: m.format === "bo1" ? m.result : "", myBf: (m.games[0] && m.games[0].myBf) || "", oppBf: (m.games[0] && m.games[0].oppBf) || "",
+    note: m.note || "", fmt: m.kind ? prefs.fmt || "bo1" : m.format, result: m.format === "bo1" ? m.result : "", myBf: (m.games[0] && m.games[0].myBf) || "", oppBf: (m.games[0] && m.games[0].oppBf) || "",
     games: gs, timeDraw: m.format === "bo3" && m.result === "D", date: toLocalInput(m.playedAt), set: m.set, setTouched: true, details: true };
 }
 
 // Formulário intocado: refaz os padrões (deck, evento) com os dados mais recentes.
-const pristine = () => !F.editId && !F.opp && !F.result && !F.turn && !F.myBf && !F.oppBf && !F.dateTouched && !F.games.some((g) => g.result || g.first || g.myBf || g.oppBf) && !F.note;
+const pristine = () => !F.editId && !F.kind && !F.opp && !F.result && !F.turn && !F.myBf && !F.oppBf && !F.dateTouched && !F.games.some((g) => g.result || g.first || g.myBf || g.oppBf) && !F.note;
 export function refreshAdd() {
   collect();
   if (pristine()) F = { ...blankForm(), details: F.details };
   // não redesenha se um seletor de lenda estiver aberto
   if (!document.querySelector("#add .pl:not(.hide)")) render();
 }
-registerView("add", () => { if (SV && !(SV.id && Date.now() < SV.until)) SV = null; collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) { F.eventId = null; F.ctx = freeCtx(); } } render(); });
+registerView("add", () => { if (SV && !(SV.id && Date.now() < SV.until)) SV = null; collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) { F.eventId = null; F.ctx = freeCtx(); F.kind = ""; } } render(); });
 export function initRegister() { bind(); }
+// saiu da tela Registrar: a folha de battlefields não fica aberta por cima de outra tela
+export function leaveAdd() { closeBfSheet(false); }
