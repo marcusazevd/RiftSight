@@ -1,4 +1,7 @@
 // Dados do jogo: domínios, sets e lendas.
+
+// Versão do app (números): vai no backup (appVersion) para avisar ao importar um arquivo de versão mais nova.
+export const APP_VER = "0.9.5";
 // Fonte das lendas/domínios: grade de lendas por domínio (Origins → Vendetta)
 // e lista de Radiance. Atualize aqui a cada set novo (ou pela tela "Sets").
 

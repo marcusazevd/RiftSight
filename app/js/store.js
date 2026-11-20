@@ -3,7 +3,7 @@
 // 2) cópia local (localStorage) sempre, para abrir rápido e funcionar sem o banco.
 // No APK, só o armazenamento local (trocável por outro adaptador).
 
-import { DEFAULT_SETS, DOMAINS } from "./data.js";
+import { DEFAULT_SETS, DOMAINS, APP_VER } from "./data.js";
 
 export const SCHEMA = 2;
 const LKEY = "rbt_v2";
@@ -462,7 +462,14 @@ export async function saveSettings(patch) {
 }
 
 export function exportData() {
-  return { app: "Riftsight", schema: SCHEMA, exportedAt: new Date().toISOString(), matches: state.matches, settings: state.settings, decks: state.decks, events: state.events, images: state.images };
+  return { app: "Riftsight", appVersion: APP_VER, schema: SCHEMA, exportedAt: new Date().toISOString(), matches: state.matches, settings: state.settings, decks: state.decks, events: state.events, images: state.images };
+}
+
+// Compara versões "0.9.5" × "0.10.0" (número a número). Devolve >0 se a for mais nova que b.
+export function cmpVer(a, b) {
+  const x = String(a || "").split(/[^0-9]+/).filter(Boolean).map(Number), y = String(b || "").split(/[^0-9]+/).filter(Boolean).map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+  return 0;
 }
 
 export function legacyMatches() {

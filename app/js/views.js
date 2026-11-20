@@ -1,5 +1,5 @@
 // Telas: Estatísticas, Histórico (partidas e eventos) e Mais (decks, backup, sets, tema, sobre).
-import { DOMAINS, EVENT_TYPES } from "./data.js";
+import { DOMAINS, EVENT_TYPES, APP_VER } from "./data.js";
 import * as S from "./store.js";
 import { record, gameRecord, group, applyFilters, insights, toCSV, gameRows, firstLabel } from "./stats.js";
 import { esc, $, $$, avatar, domainPair, domainIcon, legendColors, dialog, confirmBox, toast, RUNE, setBadge, ord } from "./ui.js";
@@ -380,6 +380,13 @@ async function doImport(txt) {
   try { o = JSON.parse(txt); } catch (e) { await dialog({ title: "Arquivo inválido", body: "<p>Não consegui ler esse backup. Confira se é o arquivo .json exportado pelo app.</p>" }); return; }
   const list = Array.isArray(o) ? o : o && Array.isArray(o.matches) ? o.matches : null;
   if (!list) { await dialog({ title: "Arquivo inválido", body: "<p>Esse arquivo não tem partidas.</p>" }); return; }
+  // backup de uma versão mais nova (Q95-05): esta versão pode não entender tudo e ignorar parte dos registros
+  if (o && !Array.isArray(o) && typeof o.appVersion === "string" && S.cmpVer(o.appVersion, APP_VER) > 0) {
+    const go = await dialog({ title: "Backup de uma versão mais nova",
+      body: `<p>Este backup foi feito na versão <b>${esc(o.appVersion)}</b> e este app está na <b>${esc(APP_VER)}</b>.</p><p>Registros que esta versão não conhece (por exemplo ID e bye, em versões antigas) podem ser ignorados ou entrar diferentes. O melhor é atualizar o app antes de importar. Guarde este arquivo: ele continua completo.</p>`,
+      actions: [{ label: "Cancelar", value: false }, { label: "Importar mesmo assim", value: true, danger: true }] });
+    if (!go) return;
+  }
   const ok = await confirmBox("Importar backup?", `${list.length} partida${list.length !== 1 ? "s" : ""} no arquivo${Array.isArray(o.decks) ? ", " + o.decks.length + " deck(s)" : ""}${Array.isArray(o.events) ? ", " + o.events.length + " evento(s)" : ""}. O que é novo entra; o repetido fica com a versão mais recente.`, "Importar");
   if (!ok) return;
   S.prepareImport(o, list);
