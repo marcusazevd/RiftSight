@@ -223,3 +223,12 @@ Scripts do UX:
   - U95-14: frases a polir.
   - "Tu/teu" no site da raiz.
 - As suítes continuam fora do git (`tests/t13_pacote21.py`, os ajustes e `tests/reteste21/` estão só no disco).
+
+## R21-01 — toque que atravessa a folha de battlefields (19–20/11/2026)
+
+Reteste independente (`/home/claude/re21/RETESTE_2.1.md`): a folha fecha sozinha 250 ms depois de escolher os dois lados e um 2º toque entre ~250 e ~500 ms caía no formulário embaixo (desmarcava "Ganhei", trocava "Eu/Ele" ou abria a folha do game seguinte) — 21 de 48 tentativas.
+
+- `app/js/register.js`: depois que a folha fecha (qualquer forma), toques fora dela são engolidos por 450 ms (`SHIELD_MS`, listener de clique em captura).
+- Prova: `/home/claude/re21/scripts/r1b_through.py` passou de 27/48 para 48/48 (2º toque a 200–350 ms em 390/360/320); toque normal ~850 ms depois funciona.
+- Testes: `tests/shieldwait.py` (importado pelo `harness.py`) faz cada `page.click` esperar essa janela quando uma folha acabou de fechar — os testes clicam mais rápido que um dedo. Regressão: t01–t09 283/303 (igual), t10 36/36, t11 47/47, t12 77/77, t13 18/18.
+- Pendências baixas do reteste (para depois do torneio): R21-02 (toque no SALVAR dentro dos 800 ms sem retorno), R21-03 (corrigir o G2 apaga o G3), R21-04 (resultados da busca em 320), R21-06 (região do leitor de tela recriada), G2 atrás da barra em 320×568 após salvar.

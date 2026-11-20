@@ -472,7 +472,15 @@ function markSide(box, side, cur) {
   const k = bfKey(cur);
   box.querySelectorAll(`.bo[data-side="${side}"][data-bf]`).forEach((x) => { const on = !!k && bfKey(x.dataset.bf) === k; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
 }
-export const RETAP_MS = 350, AUTOCLOSE_MS = 250;
+export const RETAP_MS = 350, AUTOCLOSE_MS = 250, SHIELD_MS = 450;
+// Depois que a folha fecha, o 2º toque do dedo cairia no formulário embaixo (R21-01):
+// por SHIELD_MS os toques no formulário são engolidos.
+let shieldUntil = 0;
+document.addEventListener("click", (e) => {
+  if (Date.now() >= shieldUntil) return;
+  if (e.target.closest && e.target.closest("#bfsheet")) return;
+  e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+}, true);
 function openBfSheet(i) {
   closeBfSheet(false);
   collect();
@@ -516,6 +524,7 @@ export function closeBfSheet(refocus = true) {
   const i = SH && SH.i;
   if (SH && SH.closing) clearTimeout(SH.closing);
   box.remove(); SH = null;
+  shieldUntil = Date.now() + SHIELD_MS;
   document.body.classList.remove("sheet-on");
   document.removeEventListener("keydown", sheetKeys, true);
   if (refocus && i !== null && i !== undefined) { const t = document.querySelector(`#add [data-bfg="${i}"]`); if (t) t.focus({ preventScroll: true }); }
