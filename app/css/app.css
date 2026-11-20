@@ -1047,3 +1047,20 @@ body.sheet-on{overflow:hidden}
 .rchip.k{background:var(--gold);color:var(--ink)}
 /* nomes longos sem espaço (lenda/deck digitados): quebram em vez de alargar a página (aviso salvo e histórico) */
 .svbar .sv-t,.hi .b,.rd-t{overflow-wrap:anywhere}
+/* ===== 0.9.5 · Pacote 2.1 ===== */
+/* Bo3: cabeçalho das colunas "Começou · Resultado" alinhado com a linha de cada game (U95-03) */
+.ghead{display:flex;align-items:flex-end;gap:6px;padding:0 10px;margin-bottom:-4px;font:400 16px/1 var(--f-b);color:var(--mut)}
+.ghead .gh-f{flex:none;width:104px;text-align:center}
+.ghead .gh-r{flex:1;min-width:0;text-align:center}
+/* Partida única: resultado em linha própria, "Começou:" + Eu/Ele embaixo (U95-02, U95-03) */
+.gcap{flex:none;font:400 18px var(--f-b);color:var(--mut)}
+.gline.b1res .gr.c3 button{font-size:20px}
+
+/* 320–340 px: Eu/Ele e o espaço entre os botões encolhem para "Ganhei/Perdi" caberem no bloco do game (U95-13) */
+@media (max-width:340px){
+  .gline{gap:4px}.ghead{gap:4px}
+  .gline .gf button{width:44px}
+  .ghead .gh-f{width:88px}
+  .gline .gr{gap:4px}
+  .gline .gr button{font-size:18px}
+}

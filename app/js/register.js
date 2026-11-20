@@ -235,13 +235,16 @@ function gamesHTML() {
       ${bfBtn(i)}</div>`);
   }
   const tie = split && !g[2].result;
-  return rows.join("") + (tie ? `<label class="ck tdraw"><input type="checkbox" id="f-tdraw"${F.timeDraw ? " checked" : ""}> Terminou empatado (tempo)</label>` : "");
+  // cabeçalho das colunas (o "Eu/Ele" é quem começou, não quem ganhou: U95-03); leitor de tela já tem os aria-label dos grupos
+  const head = `<div class="ghead" aria-hidden="true"><span class="gn"></span><span class="gh-f">Começou</span><span class="gh-r">Resultado</span></div>`;
+  return head + rows.join("") + (tie ? `<label class="ck tdraw"><input type="checkbox" id="f-tdraw"${F.timeDraw ? " checked" : ""}> Terminou empatado (tempo)</label>` : "");
 }
-// Partida única: quem começou e o resultado na mesma linha, battlefields embaixo.
+// Partida única: o resultado numa linha própria (três botões largos, sem cortar em 320–390 px: U95-02),
+// "Começou: Eu/Ele" embaixo e os battlefields por último.
 function bo1HTML() {
-  return `<div class="gm one" data-g="b1"><div class="gline">
-    <div class="tg gf" role="group" aria-label="Quem começou"><button type="button" data-t1="me" ${pressed(F.turn === "me")}>Eu</button><button type="button" data-t1="opp" ${pressed(F.turn === "opp")}>Ele</button></div>
+  return `<div class="gm one" data-g="b1"><div class="gline b1res">
     <div class="gr c3" id="f-res" role="group" aria-label="Resultado">${["W", "L", "D"].map((k) => `<button type="button" data-r="${k}" ${pressed(F.result === k).replace('class="', `class="${k} `)}>${RES[k]}</button>`).join("")}</div></div>
+    <div class="gline"><span class="gcap" aria-hidden="true">Começou:</span><div class="tg gf" role="group" aria-label="Quem começou"><button type="button" data-t1="me" ${pressed(F.turn === "me")}>Eu</button><button type="button" data-t1="opp" ${pressed(F.turn === "opp")}>Ele</button></div></div>
     ${bfBtn("b1")}</div>`;
 }
 
