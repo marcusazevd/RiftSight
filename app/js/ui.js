@@ -29,7 +29,8 @@ export function legendInfo(name) {
 }
 export function legendColors(name) {
   const d = legendInfo(name).domains;
-  if (d && d.length === 2) return [DOMAINS[d[0]].color, DOMAINS[d[1]].color];
+  // domínio desconhecido (lenda importada de outra versão): cai nas cores neutras
+  if (d && d.length === 2 && DOMAINS[d[0]] && DOMAINS[d[1]]) return [DOMAINS[d[0]].color, DOMAINS[d[1]].color];
   return ["#8d7a52", "#4a4232"];
 }
 
@@ -44,7 +45,7 @@ export function avatar(name, size = 40) {
   if (!name) return `<span class="av emp" style="--s:${size}px">+</span>`;
   const [a, b] = legendColors(name);
   const img = getState().images[name];
-  if (img) return `<span class="av img" style="--s:${size}px;--a:${a};--b:${b}"><img src="${img}" alt="" draggable="false"></span>`;
+  if (img) return `<span class="av img" style="--s:${size}px;--a:${a};--b:${b}"><img src="${esc(img)}" alt="" draggable="false"></span>`;
   return `<span class="av" style="--s:${size}px;--a:${a};--b:${b}"><span>${esc(initials(name))}</span></span>`;
 }
 // Selo de set (C5): ícone pixelado próprio + sigla, na cor do set.
@@ -60,17 +61,37 @@ export function setInfo(id) {
   const s = allSets().find((x) => x.id === id) || DEFAULT_SETS.find((x) => x.id === id) || { id, name: id || "—" };
   const def = DEFAULT_SETS.find((x) => x.id === id);
   const n = [...String(id || "")].reduce((a, c) => a + c.charCodeAt(0), 0);
-  return { ...s, color: s.color || (def && def.color) || SET_PALETTE[n % SET_PALETTE.length], glyph: s.glyph || (def && def.glyph) || "gem" };
+  const color = typeof s.color === "string" && /^#[0-9a-fA-F]{3,8}$/.test(s.color) ? s.color : "";
+  return { ...s, name: String(s.name ?? id ?? "—"), color: color || (def && def.color) || SET_PALETTE[n % SET_PALETTE.length], glyph: s.glyph || (def && def.glyph) || "gem" };
 }
 export function setGlyph(id, size = 10) {
   const s = setInfo(id);
-  return `<svg width="${size}" height="${size}" viewBox="0 0 12 12" fill="${s.color}" shape-rendering="crispEdges" aria-hidden="true"><path d="${SET_GLYPH[s.glyph] || SET_GLYPH.gem}"/></svg>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 12 12" fill="${esc(s.color)}" shape-rendering="crispEdges" aria-hidden="true"><path d="${SET_GLYPH[s.glyph] || SET_GLYPH.gem}"/></svg>`;
 }
 export function setBadge(id, { full = false } = {}) {
   if (!id) return `<span class="setb" style="--sc:var(--mut)">—</span>`;
   const s = setInfo(id);
-  return `<span class="setb" style="--sc:${s.color}" title="${esc(s.name)}">${setGlyph(id)}${esc(full ? s.name : s.id)}</span>`;
+  return `<span class="setb" style="--sc:${esc(s.color)}" title="${esc(s.name)}">${setGlyph(id)}${esc(full ? s.name : s.id)}</span>`;
 }
+// Ordinal ("5º"): a fonte do corpo desenha o "º" como um "o" na linha de base, então o sinal vai na fonte do sistema.
+export const ord = (n) => `${esc(n)}<span class="ord">º</span>`;
+
+// ---------- contraste ----------
+// Cor do texto sobre um fundo colorido (botões de domínio, células da matriz): texto escuro em fundo claro,
+// branco em fundo escuro. Se nenhum dos dois chega a 4,5:1, o fundo escurece um pouco até o branco chegar.
+const INK = "#120c22";
+const rgbOf = (c) => { const s = String(c).trim(); if (s[0] === "#") { const h = s.length === 4 ? [...s.slice(1)].map((x) => x + x).join("") : s.slice(1, 7); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); } return (s.match(/\d+(\.\d+)?/g) || [0, 0, 0]).slice(0, 3).map(Number); };
+const lum = (c) => { const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const INK_L = lum(rgbOf(INK));
+export function contrast(a, b) { const x = lum(rgbOf(a)), y = lum(rgbOf(b)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+export function inkOn(bg) {
+  let c = rgbOf(bg);
+  const dark = (lum(c) + 0.05) / (INK_L + 0.05);
+  if (dark >= 4.5) return { bg: `rgb(${c.join(",")})`, ink: INK, dark: true };
+  for (let i = 0; i < 40 && 1.05 / (lum(c) + 0.05) < 4.5; i++) c = c.map((v) => Math.round(v * 0.97));
+  return { bg: `rgb(${c.join(",")})`, ink: "#fff", dark: false };
+}
+
 export function domainPair(name, size = 14) {
   return (legendInfo(name).domains || []).map((d) => domainIcon(d, size)).join("");
 }
@@ -109,17 +130,26 @@ export const promptBox = (title, label, value = "") =>
     onOpen: (r) => r.querySelector("#dlg-in").addEventListener("keydown", (e) => { if (e.key === "Enter") r.querySelector(".btn.pri").click(); }),
   });
 
-let toastT;
-export function toast(msg, action = null, ms = 2200) {
+// Aviso flutuante. Com ação (Desfazer, Card), a duração pedida é respeitada; ao esconder, o botão sai do DOM
+// e um clique atrasado (aviso já escondido ou trocado por outro) é ignorado.
+let toastT, toastSeq = 0;
+export function toast(msg, action = null, ms = null) {
   let t = document.getElementById("toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+  const seq = ++toastSeq;
   t.textContent = msg;
   t.classList.toggle("act", !!action);
   if (action) {
     const b = document.createElement("button"); b.type = "button"; b.textContent = action.label;
-    b.onclick = () => { t.classList.remove("on"); clearTimeout(toastT); action.fn(); };
+    b.onclick = () => { if (seq !== toastSeq || !t.classList.contains("on")) return; hide(); action.fn(); };
     t.appendChild(b);
   }
+  // some na hora para o toque (CSS: só #toast.on button recebe toque); o botão sai do DOM depois do fade
+  const hide = () => {
+    if (seq !== toastSeq) return;
+    t.classList.remove("on"); clearTimeout(toastT);
+    setTimeout(() => { if (seq !== toastSeq) return; const b = t.querySelector("button"); if (b) b.remove(); t.classList.remove("act"); }, 250);
+  };
   t.classList.add("on");
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), action ? 6000 : ms);
+  clearTimeout(toastT); toastT = setTimeout(hide, ms || (action ? 6000 : 2200));
 }

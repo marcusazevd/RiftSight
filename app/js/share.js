@@ -1,7 +1,7 @@
 // Card compartilhável (T5): imagem PNG do evento ou do deck + texto pronto.
 import * as S from "./store.js";
-import { record, group } from "./stats.js";
-import { RES_SHORT, eventRecord, fmtDate } from "./core.js";
+import { record, group, hardestMatchup, bestMatchup } from "./stats.js";
+import { RES_SHORT, eventRecord, fmtDate, KIND_LABEL } from "./core.js";
 import { esc, $, dialog, toast, legendColors, legendInfo, setInfo } from "./ui.js";
 import { DOMAINS } from "./data.js";
 
@@ -39,6 +39,16 @@ function text(ctx, s, x, y, font, color, align = "left", maxW) {
   if (maxW) { let t = String(s); while (t.length > 1 && ctx.measureText(t).width > maxW) t = t.slice(0, -2) + "…"; s = t; }
   ctx.fillText(s, x, y); return ctx.measureText(s).width;
 }
+// Texto em pedaços com fontes diferentes na mesma linha (ex.: o "º", que a Jersey 10 desenha como "o").
+const SYS = "system-ui, -apple-system, Roboto, Arial, sans-serif";
+function textParts(ctx, parts, x, y, color, align = "left") {
+  const ws = parts.map(([s, font]) => { ctx.font = font; return ctx.measureText(s).width; });
+  const total = ws.reduce((a, b) => a + b, 0);
+  let cx = align === "center" ? x - total / 2 : align === "right" ? x - total : x;
+  ctx.fillStyle = color; ctx.textAlign = "left";
+  parts.forEach(([s, font], i) => { ctx.font = font; ctx.fillText(s, cx, y); cx += ws[i]; });
+  return total;
+}
 function shadowText(ctx, s, x, y, font, color, align = "left", maxW) {
   text(ctx, s, x + 6, y + 6, font, "#000", align, maxW); return text(ctx, s, x, y, font, color, align, maxW);
 }
@@ -58,7 +68,7 @@ async function avatar(ctx, name, x, y, s) {
   ctx.lineWidth = Math.max(4, s / 30); ctx.strokeStyle = "#000"; ctx.strokeRect(x, y, s, s);
 }
 function domainsBar(ctx, name, x, y, w) {
-  const d = legendInfo(name).domains || [];
+  const d = (legendInfo(name).domains || []).filter((k) => DOMAINS[k]);
   d.forEach((k, i) => { ctx.fillStyle = DOMAINS[k].color; ctx.fillRect(x + i * (w / 2 + 6), y, w / 2 - 6, 12); });
   return d.map((k) => DOMAINS[k].name).join(" · ");
 }
@@ -68,7 +78,8 @@ function badge(ctx, id, x, y) {
   ctx.fillStyle = s.color + "26"; ctx.fillRect(x, y - 30, w, 42); ctx.strokeStyle = s.color; ctx.lineWidth = 3; ctx.strokeRect(x, y - 30, w, 42);
   text(ctx, s.name.toUpperCase(), x + 16, y + 1, `20px ${D}`, s.color); return w;
 }
-function recStr(r) { return `${r.w}-${r.l}${r.d ? "-" + r.d : ""}`; }
+// mesmo formato do app: travessão (3–1–1)
+function recStr(r) { return `${r.w}–${r.l}${r.d ? "–" + r.d : ""}`; }
 function bar(ctx, x, y, w, h, p, color) { ctx.fillStyle = C.bd; ctx.fillRect(x, y, w, h); ctx.fillStyle = color; ctx.fillRect(x, y, Math.round(w * p), h); }
 
 async function eventCanvas(ev) {
@@ -77,7 +88,7 @@ async function eventCanvas(ev) {
   base(ctx);
   const r = eventRecord(ev), ms = r.matches.slice().sort((a, b) => (a.event.round || 0) - (b.event.round || 0));
   const dk = ev.deckId ? S.deck(ev.deckId) : null;
-  const my = (dk && dk.legend) || (ms[0] && ms[0].my) || "";
+  const my = (dk && dk.legend) || (ms.find((m) => m.my) || {}).my || "";
   const setId = (ms[0] && ms[0].set) || S.setForDate(ev.date || Date.now());
   let bx = 72; bx += badge(ctx, setId, bx, 176) + 14; text(ctx, (ev.type || "").toUpperCase(), bx, 176, `20px ${D}`, C.mut);
   shadowText(ctx, ev.name || "Evento", 72, 270, `700 72px ${B}`, C.tx, "left", W - 144);
@@ -91,24 +102,40 @@ async function eventCanvas(ev) {
   }
   // recorde
   shadowText(ctx, recStr(r), W / 2, 760, `130px ${D}`, C.gold, "center");
-  const sub = [ev.placement ? `${ev.placement}º lugar${ev.players ? " de " + ev.players : ""}` : "", ev.topCut ? "TOP CUT" : ""].filter(Boolean).join(" · ");
-  text(ctx, sub || `${r.n} rodada${r.n !== 1 ? "s" : ""}`, W / 2, 828, `700 40px ${B}`, ev.topCut ? C.cyan : C.tx, "center");
-  // rodadas
-  const rows = ms.slice(0, 7), top = 880, rh = rows.length <= 4 ? 80 : 58;
+  const subColor = ev.topCut ? C.cyan : C.tx, subFont = `700 40px ${B}`;
+  if (ev.placement) {
+    // o "º" vai numa fonte que tem o glifo elevado
+    const rest = ` lugar${ev.players ? " de " + ev.players : ""}${ev.topCut ? " · TOP CUT" : ""}`;
+    textParts(ctx, [[String(ev.placement), subFont], ["º", `700 36px ${SYS}`], [rest, subFont]], W / 2, 828, subColor, "center");
+  } else text(ctx, ev.topCut ? "TOP CUT" : `${r.n} rodada${r.n !== 1 ? "s" : ""}`, W / 2, 828, subFont, subColor, "center");
+  // rodadas: até 6 numa coluna; de 7 a 12 em duas colunas (6 linhas cada). Tudo acaba antes do rodapé e da moldura.
+  const top = 880, two = ms.length > 6, cap = two ? 12 : 6, rh = !two && ms.length <= 4 ? 80 : 58;
+  const rows = ms.length > cap ? ms.slice(0, cap - 1) : ms; // passou do limite: a última casa vira "+ N rodadas"
+  const gapX = 16, colW = two ? (W - 144 - gapX) / 2 : W - 144;
+  const cell = (i) => ({ x: 72 + (two ? Math.floor(i / 6) : 0) * (colW + gapX), y: top + (two ? i % 6 : i) * rh });
   for (let i = 0; i < rows.length; i++) {
-    const m = rows[i], y = top + i * rh;
-    ctx.fillStyle = i % 2 ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.06)"; ctx.fillRect(72, y, W - 144, rh - 6);
+    const m = rows[i], { x, y } = cell(i);
+    ctx.fillStyle = (two ? i % 6 : i) % 2 ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.06)"; ctx.fillRect(x, y, colW, rh - 6);
     ctx.save(); ctx.translate(0, (rh - 58) / 2);
-    text(ctx, "R" + (m.event.round || i + 1), 92, y + 38, `20px ${D}`, C.mut);
-    ctx.fillStyle = RC[m.result]; ctx.fillRect(176, y + 10, 40, 32);
-    text(ctx, RES_SHORT[m.result], 196, y + 36, `18px ${D}`, "#120c22", "center");
-    const [a, b] = legendColors(m.opp); ctx.fillStyle = a; ctx.fillRect(240, y + 12, 14, 28); ctx.fillStyle = b; ctx.fillRect(254, y + 12, 14, 28);
-    text(ctx, "vs " + m.opp, 286, y + 38, `700 34px ${B}`, C.tx, "left", 560);
-    const sc = m.score ? m.score.replace("-", "–") : m.games && m.games[0] && m.games[0].points ? m.games[0].points.me + "–" + m.games[0].points.opp : "";
-    if (sc) text(ctx, sc, W - 92, y + 38, `22px ${D}`, RC[m.result], "right");
+    const o = two ? [14, 82, 132, 166] : [20, 104, 168, 214]; // em duas colunas tudo fica mais junto, para o nome caber
+    text(ctx, "R" + (m.event.round || i + 1), x + o[0], y + 38, `${two ? 18 : 20}px ${D}`, C.mut);
+    const cw = two ? 12 : 14;
+    if (m.kind) {
+      // ID / bye: selo dourado mais largo (o texto passa por cima das cores da lenda, que não existem no bye)
+      ctx.fillStyle = C.gold; ctx.fillRect(x + o[1], y + 10, o[2] + 2 * cw - o[1], 32);
+      text(ctx, KIND_LABEL[m.kind], x + (o[1] + o[2] + 2 * cw) / 2, y + 36, `${two ? 14 : 18}px ${D}`, "#120c22", "center");
+    } else {
+      ctx.fillStyle = RC[m.result]; ctx.fillRect(x + o[1], y + 10, 40, 32);
+      text(ctx, RES_SHORT[m.result], x + o[1] + 20, y + 36, `18px ${D}`, "#120c22", "center");
+      const [a, b] = legendColors(m.opp); ctx.fillStyle = a; ctx.fillRect(x + o[2], y + 12, cw, 28); ctx.fillStyle = b; ctx.fillRect(x + o[2] + cw, y + 12, cw, 28);
+    }
+    const sc = m.kind ? "" : m.score ? m.score.replace("-", "–") : m.games && m.games[0] && m.games[0].points ? m.games[0].points.me + "–" + m.games[0].points.opp : "";
+    const who = m.kind === "bye" ? "sem oponente" : m.kind === "id" ? (m.opp ? "vs " + m.opp : "empate combinado") + " · sem games" : "vs " + m.opp;
+    text(ctx, who, x + o[3], y + 38, `700 34px ${B}`, m.kind ? C.mut : C.tx, "left", two ? colW - o[3] - (sc ? 92 : 16) : 560);
+    if (sc) text(ctx, sc, x + colW - 20, y + 38, `22px ${D}`, RC[m.result], "right");
     ctx.restore();
   }
-  if (ms.length > rows.length) text(ctx, `+ ${ms.length - rows.length} rodada(s)`, W / 2, top + rows.length * rh + 34, `400 28px ${B}`, C.mut, "center");
+  if (ms.length > rows.length) { const { x, y } = cell(rows.length); text(ctx, `+ ${ms.length - rows.length} rodadas`, x + colW / 2, y + 38, `400 30px ${B}`, C.mut, "center"); }
   return cv;
 }
 
@@ -116,7 +143,7 @@ async function deckCanvas(dk) {
   await fonts();
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const ctx = cv.getContext("2d");
   base(ctx);
-  const all = S.getState().matches.filter((m) => m.deckId === dk.id);
+  const all = S.played().filter((m) => m.deckId === dk.id);
   const r = record(all), cur = S.setForDate(Date.now());
   let bx = 72; bx += badge(ctx, dk.set || cur, bx, 176) + 14; text(ctx, "DECK", bx, 176, `20px ${D}`, C.mut);
   await avatar(ctx, dk.legend, 72, 226, 240);
@@ -137,13 +164,14 @@ async function deckCanvas(dk) {
     }
     y += 24;
   }
-  const mus = group(all, (m) => m.opp).filter((x) => x.n >= 2).sort((a, b) => b.p - a.p || b.n - a.n);
-  if (mus.length) {
+  // mesma conta da aba Matchups: o que mais pesa a favor e contra (frequência × taxa suavizada)
+  const bestMu = bestMatchup(all), hardMu = hardestMatchup(all);
+  const pick = [bestMu && ["MELHOR", bestMu, C.win], hardMu && ["MAIS DIFÍCIL", hardMu, C.loss]].filter(Boolean);
+  if (pick.length) {
     text(ctx, "MATCHUPS", 72, y, `20px ${D}`, C.cyan); y += 24;
-    const pick = mus.length > 1 ? [["MELHOR", mus[0]], ["MAIS DIFÍCIL", mus[mus.length - 1]]] : [["MELHOR", mus[0]]];
-    for (const [lbl, mu] of pick) {
+    for (const [lbl, mu, col] of pick) {
       await avatar(ctx, mu.k, 72, y + 6, 72);
-      text(ctx, lbl, 172, y + 36, `16px ${D}`, lbl === "MELHOR" ? C.win : C.loss);
+      text(ctx, lbl + (mu.few ? " (POUCOS DADOS)" : ""), 172, y + 36, `16px ${D}`, col);
       text(ctx, mu.k, 172, y + 72, `700 32px ${B}`, C.tx, "left", 520);
       text(ctx, `${recStr(mu)}  ${Math.round(mu.p * 100)}%`, W - 72, y + 60, `20px ${D}`, C.tx, "right"); y += 100;
     }
@@ -155,12 +183,12 @@ function eventText(ev) {
   const r = eventRecord(ev), dk = ev.deckId ? S.deck(ev.deckId) : null;
   const ms = r.matches.slice().sort((a, b) => (a.event.round || 0) - (b.event.round || 0));
   return [`🏆 ${ev.name} (${ev.type})${ev.place ? " — " + ev.place : ""}`,
-    `${dk ? dk.name + " · " + dk.legend : ms[0] ? ms[0].my : ""}`,
-    `Resultado: ${recStr(r)}${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}`,
-    ...ms.map((m) => `R${m.event.round || "?"} ${RES_SHORT[m.result]} vs ${m.opp}${m.score ? " (" + m.score + ")" : ""}`)].filter(Boolean).join("\n");
+    `${dk ? dk.name + " · " + dk.legend : (ms.find((m) => m.my) || {}).my || ""}`,
+    `Resultado: ${recStr(r)}${r.d ? " (V–D–E)" : ""}${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}`,
+    ...ms.map((m) => m.kind === "bye" ? `R${m.event.round || "?"} BYE` : m.kind === "id" ? `R${m.event.round || "?"} ID${m.opp ? " vs " + m.opp : ""}` : `R${m.event.round || "?"} ${RES_SHORT[m.result]} vs ${m.opp}${m.score ? " (" + m.score + ")" : ""}`)].filter(Boolean).join("\n");
 }
 function deckText(dk) {
-  const all = S.getState().matches.filter((m) => m.deckId === dk.id), r = record(all);
+  const all = S.played().filter((m) => m.deckId === dk.id), r = record(all);
   const vers = group(all, (m) => m.version).sort((a, b) => b.n - a.n).slice(0, 3);
   return [`🃏 ${dk.name} · ${dk.legend}`, `${recStr(r)} · ${Math.round(r.p * 100)}% em ${r.n} partida${r.n !== 1 ? "s" : ""}`,
     ...vers.map((v) => `${v.k}: ${recStr(v)} (${Math.round(v.p * 100)}%)`)].join("\n");

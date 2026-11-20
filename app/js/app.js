@@ -2,12 +2,12 @@
 import * as S from "./store.js";
 import { record } from "./stats.js";
 import { $, $$, toast, RUNE, esc, dialog, setBadge } from "./ui.js";
-import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey } from "./core.js";
-import { initRegister, refreshAdd } from "./register.js";
-import { initLive } from "./live.js";
-import { initViews, refreshMore } from "./views.js";
+import { applyTheme, showView, currentView, rerender, allBattlefields, knownBattlefields, bfKey, readLive, liveLost } from "./core.js";
+import { initRegister, refreshAdd, closeBfSheet, leaveAdd } from "./register.js";
+import { initLive, liveBack } from "./live.js";
+import { initViews, refreshMore, moreBack, leaveDeckEditor } from "./views.js";
 import { maybeStartJourney, journeyBack } from "./onboard.js";
-import { initAnalysis } from "./analysis.js";
+import { initAnalysis, statsBack } from "./analysis.js";
 
 const IC = {
   add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l9-9M14.5 3.5l6 6-7 7-6-6z"/><path d="M4 16l4 4"/></svg>',
@@ -17,7 +17,7 @@ const IC = {
 };
 
 function renderHeader() {
-  const r = record(S.getState().matches);
+  const r = record(S.played());
   $("#rec").innerHTML = r.n ? `<b>${r.w}–${r.l}${r.d ? "–" + r.d : ""}</b>${r.n} partida${r.n > 1 ? "s" : ""}` : `sem partidas`;
 }
 
@@ -42,8 +42,14 @@ function boot() {
   <nav aria-label="Navegação">
     <button data-t="add" class="on">${IC.add}Registrar</button><button data-t="stats">${IC.stats}Estatísticas</button>
     <button data-t="hist">${IC.hist}Histórico</button><button data-t="more">${IC.more}Mais</button></nav>`);
-  $$("nav button").forEach((b) => (b.onclick = () => showView(b.dataset.t)));
+  // sair do editor de deck pelas abas também pergunta quando há alteração não salva
+  $$("nav button").forEach((b) => (b.onclick = async () => { if (currentView() === "more" && !(await leaveDeckEditor())) return; leaveAdd(); showView(b.dataset.t); }));
+  // altura real da navegação: a barra SALVAR fica logo acima dela (e o fim da página reserva as duas)
+  const navH = () => { const n = document.querySelector("nav"); if (n) document.documentElement.style.setProperty("--navh", n.offsetHeight + "px"); };
+  navH(); addEventListener("resize", navH);
+  try { new ResizeObserver(navH).observe(document.querySelector("nav")); } catch (e) {} // a fonte carrega depois e muda a altura
   initRegister(); initLive(); initViews(); initAnalysis();
+  watchKeyboard();
   // seletor de battlefield (botões): escolhe, desmarca ou adiciona outro
   document.addEventListener("click", async (e) => {
     const b = e.target.closest(".bfp button"); if (!b) return;
@@ -75,21 +81,38 @@ function boot() {
   S.onError((msg) => toast(msg, null, 6000));
   renderHeader();
   // retoma o contador se havia partida em andamento
-  let live = null; try { live = JSON.parse(localStorage.getItem("rbt_live") || "null"); } catch (e) {}
+  const live = readLive();
   showView(live && live.phase === "play" ? "live" : "add");
   S.init();
-  if (S.getState().corruptAt) setTimeout(() => dialog({ title: "Cópia local danificada", body: "<p>Os dados salvos neste aparelho estavam danificados e não puderam ser lidos. O conteúdo foi guardado à parte, sem ser apagado.</p><p class=\"m\">Importe teu último backup em Mais › Backup" + (window.RBTAndroid ? " (o app também guarda um backup automático em Downloads/Riftsight)" : "") + ".</p>" }), 600);
+  if (S.getState().corruptAt) setTimeout(() => dialog({ title: "Cópia local danificada", body: "<p>Os dados salvos neste aparelho estavam danificados e não puderam ser lidos. O conteúdo foi guardado à parte, sem ser apagado.</p><p class=\"m\">Importe seu último backup em Mais › Backup" + (window.RBTAndroid ? " (o app também guarda um backup automático em Downloads/Riftsight)" : "") + ".</p>" }), 600);
+  else { const msg = repairNote(); if (msg) setTimeout(() => toast(msg, null, 10000), 600); }
   // Modo offline/instalável: só funciona fora do claude.ai (página própria ou APK).
   if (window.RBTAndroid) androidBridge();
   if (!S.getState().corruptAt) setTimeout(maybeStartJourney, 300);
   try { if (!window.RBTAndroid && "serviceWorker" in navigator && window.top === window && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {}); } catch (e) {}
+}
+// Aviso de dados reparados ao abrir: diz o que ficou de fora (e quanto entrou) e que há cópia do original.
+function repairNote() {
+  const st = S.getState(), parts = [];
+  const pl = (n, a, b) => n + " " + (n !== 1 ? b : a);
+  if (st.repairedAt && st.repaired) {
+    const [mk, mt] = st.repaired.matches, [dk, dt] = st.repaired.decks, [ek, et] = st.repaired.events;
+    if (mt > mk) parts.push(`${pl(mt - mk, "partida danificada ficou", "partidas danificadas ficaram")} de fora (${mk} de ${mt} carregadas).`);
+    if (dt > dk) parts.push(`${pl(dt - dk, "deck danificado ficou", "decks danificados ficaram")} de fora.`);
+    if (et > ek) parts.push(`${pl(et - ek, "evento danificado ficou", "eventos danificados ficaram")} de fora.`);
+    if (!parts.length) parts.push(`Parte dos dados salvos estava em formato errado e foi consertada (${pl(mk, "partida", "partidas")} carregada${mk !== 1 ? "s" : ""}).`);
+  }
+  if (st.imagesDropped) parts.push(st.imagesDropped > 0 ? `${pl(st.imagesDropped, "imagem de lenda inválida foi ignorada", "imagens de lenda inválidas foram ignoradas")}.` : "As imagens das lendas estavam danificadas e foram ignoradas.");
+  if (liveLost()) parts.push("A partida em andamento no contador estava danificada e não pôde ser recuperada.");
+  if (!parts.length) return "";
+  return parts.join(" ") + " Uma cópia do original ficou guardada neste aparelho; confira seu último backup em Mais › Backup.";
 }
 // Busca de battlefield: lista todos (catálogo + digitados), filtra ao digitar, permite nome novo.
 async function bfSearch(current, used) {
   const all = allBattlefields(), recent = knownBattlefields().slice(0, 6);
   let pick = null;
   const row = (b) => `<button type="button" class="bfr${b.name === current ? " on" : ""}" data-n="${esc(b.name)}" data-k="${esc(bfKey(b.name))}"${used.includes(b.name) && b.name !== current ? " disabled" : ""}>
-    <span>${esc(b.name)}</span>${b.banned ? '<span class="bfban">banido</span>' : ""}${b.set ? setBadge(b.set) : '<span class="m">teu</span>'}</button>`;
+    <span>${esc(b.name)}</span>${b.banned ? '<span class="bfban">banido</span>' : ""}${b.set ? setBadge(b.set) : '<span class="m">seu</span>'}</button>`;
   const recentRows = recent.map((n) => all.find((b) => b.name === n)).filter(Boolean);
   await dialog({
     title: "Escolher battlefield",
@@ -124,20 +147,50 @@ function androidBridge() {
   // backup automático: um arquivo fixo em Downloads, regravado após cada mudança (nunca vazio)
   let t = null;
   S.subscribe((st) => {
-    if (st.loading || !st.matches.length) return;
-    clearTimeout(t);
-    t = setTimeout(() => { try { if (window.RBTAndroid.autoBackup) window.RBTAndroid.autoBackup(JSON.stringify(S.exportData())); } catch (e) {} }, 3000);
+    if (st.loading) return;
+    clearTimeout(t); t = null;
+    // histórico vazio nunca vai para o arquivo: cancela o que estava agendado e confere de novo na hora de gravar
+    if (!st.matches.length) return;
+    t = setTimeout(() => {
+      t = null;
+      try { if (S.getState().matches.length && window.RBTAndroid.autoBackup) window.RBTAndroid.autoBackup(JSON.stringify(S.exportData())); } catch (e) {}
+    }, 3000);
   });
   try { navigator.vibrate = (p) => { try { window.RBTAndroid.vibrate(JSON.stringify(p)); } catch (e) {} return true; }; } catch (e) {}
   window.__rbtBack = () => {
     if (journeyBack()) return true;
+    if (closeBfSheet()) return true; // folha de battlefields do registro
     const bg = document.querySelector('#dlg [data-v="__cancel"]');
     if (bg) { bg.click(); return true; }
     const open = document.querySelector(".pl:not(.hide)"); if (open) { open.classList.add("hide"); return true; }
     const v = currentView();
-    if (v === "live") return false;
+    // contador: no setup volta para Registrar; em jogo fica como estava (o placar segue guardado)
+    if (v === "live") return liveBack();
+    // subtelas voltam um nível antes de sair da aba
+    if (v === "more" && moreBack()) return true;
+    if (v === "stats" && statsBack()) return true;
     if (v !== "add") { showView("add"); return true; }
     return false;
   };
+}
+// Teclado virtual (U95-06): com um campo de texto focado e a janela encolhida (adjustResize no APK, ou
+// visualViewport no navegador), a barra SALVAR e a navegação somem para não cobrir o campo; o campo é
+// trazido para a área visível. Fecha o teclado (ou tira o foco): tudo volta.
+const TYPING = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=button]):not([type=submit]):not([type=range]):not([type=color]):not([type=date]):not([type=datetime-local]):not([type=file])';
+function watchKeyboard() {
+  const vv = window.visualViewport, vh = () => (vv ? vv.height : innerHeight);
+  let baseH = vh(), baseW = innerWidth;
+  const check = () => {
+    if (innerWidth !== baseW) { baseW = innerWidth; baseH = vh(); } // girou a tela: nova referência
+    const h = vh(); if (h > baseH) baseH = h;
+    const a = document.activeElement, typing = !!(a && a.matches && a.matches(TYPING));
+    const on = typing && h < baseH * 0.8;
+    if (on !== document.body.classList.contains("kbd-on")) document.body.classList.toggle("kbd-on", on);
+    if (on) requestAnimationFrame(() => { const r = a.getBoundingClientRect(); if (r.bottom > vh() - 8 || r.top < 0) a.scrollIntoView({ block: "center" }); });
+  };
+  addEventListener("resize", check);
+  if (vv) vv.addEventListener("resize", check);
+  document.addEventListener("focusin", check);
+  document.addEventListener("focusout", () => setTimeout(check, 0));
 }
 boot();

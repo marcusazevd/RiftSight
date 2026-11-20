@@ -1,7 +1,7 @@
 {
   "name": "Riftsight",
   "short_name": "Riftsight",
-  "description": "Conquer. Hold. Understand. Registro e análise das tuas partidas de Riftbound (app de fã, não oficial).",
+  "description": "Conquer. Hold. Understand. Registro e análise das suas partidas de Riftbound (app de fã, não oficial).",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#120c22",

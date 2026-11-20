@@ -1,9 +1,9 @@
 // Telas: Estatísticas, Histórico (partidas e eventos) e Mais (decks, backup, sets, tema, sobre).
-import { DOMAINS, EVENT_TYPES } from "./data.js";
+import { DOMAINS, EVENT_TYPES, APP_VER } from "./data.js";
 import * as S from "./store.js";
 import { record, gameRecord, group, applyFilters, insights, toCSV, gameRows, firstLabel } from "./stats.js";
-import { esc, $, $$, avatar, domainPair, domainIcon, legendColors, dialog, confirmBox, toast, RUNE, setBadge } from "./ui.js";
-import { RES, RES_SHORT, APP_VERSION, prefs, savePrefs, applyTheme, setName, fmtDate, eventRecord, registerView, showView, knownBattlefields, canonBf } from "./core.js";
+import { esc, $, $$, avatar, domainPair, domainIcon, legendColors, dialog, confirmBox, toast, RUNE, setBadge, ord } from "./ui.js";
+import { RES, RES_SHORT, APP_VERSION, prefs, savePrefs, applyTheme, setName, fmtDate, eventRecord, registerView, showView, knownBattlefields, canonBf, KIND_LABEL, roundText, recTxt, recHTML } from "./core.js";
 import { editMatch, legendOptions, bindPickers, startEvent, closeEvent } from "./register.js";
 import { LEGENDS } from "./data.js";
 
@@ -18,39 +18,59 @@ const IC = {
 
 // ================= Histórico =================
 let histTab = "matches";
+// Nome curto de um registro (diálogos e avisos): "Vitória contra Ahri", "ID contra Kai'Sa", "Bye da rodada 5".
+export function matchTitle(m) {
+  if (m.kind === "bye") return "Bye" + (m.event && m.event.round ? " da rodada " + m.event.round : "");
+  if (m.kind === "id") return "ID" + (m.opp ? " contra " + m.opp : "") + (m.event && m.event.round ? " (rodada " + m.event.round + ")" : "");
+  return `${RES[m.result]} contra ${m.opp}`;
+}
+// Rodada sem jogo (ID ou bye): aparece no histórico, sem placar nem turno.
+function kindRow(m) {
+  const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null;
+  const what = m.kind === "id" ? "empate combinado" + (m.opp ? " contra " + esc(m.opp) : "") : "sem oponente · conta como vitória";
+  return `<div class="hi ${esc(m.result)} kind">${m.opp ? avatar(m.opp, 36) : '<span class="av emp" style="--s:36px" aria-hidden="true">–</span>'}<div class="b"><b class="kd">${KIND_LABEL[m.kind]}</b> ${what}
+    <div class="m">${m.my ? "com " + esc(m.my) + (m.version ? " (" + esc(m.version) + ")" : "") + "<br>" : ""}${ev ? esc(ev.name) + " · rodada " + esc(m.event.round || "?") : esc((m.event && m.event.type) || "")} · ${fmtDate(m.playedAt)} · fora das estatísticas${m.note ? "<br>" + esc(m.note) : ""}</div></div>
+    <button class="x" data-ed="${esc(m.id)}" aria-label="Editar ${esc(matchTitle(m))}">✎</button><button class="x" data-del="${esc(m.id)}" aria-label="Apagar ${esc(matchTitle(m))}">✕</button></div>`;
+}
 function matchRow(m) {
+  if (m.kind) return kindRow(m);
   const g1 = m.games && m.games[0];
   const first = g1 && g1.first ? (g1.first === "me" ? "começou jogando" : "começou em segundo") : "";
   const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null;
   const pts = m.format !== "bo3" && g1 && g1.points ? " " + g1.points.me + "–" + g1.points.opp : "";
-  return `<div class="hi ${m.result}">${avatar(m.opp, 36)}<div class="b"><b class="${m.result.toLowerCase()}">${RES[m.result].toUpperCase()}</b>${m.score ? " " + m.score.replace("-", "–") : pts} contra ${esc(m.opp)}
-    <div class="m">${setBadge(m.set)} com ${esc(m.my)}${m.version ? " (" + esc(m.version) + ")" : ""}<br>${ev ? esc(ev.name) + " · rodada " + (m.event.round || "?") : esc((m.event && m.event.type) || "")}${first ? ", " + first : ""} · ${fmtDate(m.playedAt)}${m.source === "contador" ? " · ⏱" : ""}${m.note ? "<br>" + esc(m.note) : ""}</div></div>
-    <button class="x" data-ed="${m.id}" aria-label="Editar partida">✎</button><button class="x" data-del="${m.id}" aria-label="Apagar partida">✕</button></div>`;
+  return `<div class="hi ${esc(m.result)}">${avatar(m.opp, 36)}<div class="b"><b class="${esc(m.result.toLowerCase())}">${RES[m.result].toUpperCase()}</b>${m.score ? " " + esc(m.score.replace("-", "–")) : esc(pts)} contra ${esc(m.opp)}
+    <div class="m">${setBadge(m.set)} com ${esc(m.my)}${m.version ? " (" + esc(m.version) + ")" : ""}<br>${ev ? esc(ev.name) + " · rodada " + esc(m.event.round || "?") : esc((m.event && m.event.type) || "")}${first ? ", " + first : ""} · ${fmtDate(m.playedAt)}${m.source === "contador" ? " · ⏱" : ""}${m.note ? "<br>" + esc(m.note) : ""}</div></div>
+    <button class="x" data-ed="${esc(m.id)}" aria-label="Editar partida">✎</button><button class="x" data-del="${esc(m.id)}" aria-label="Apagar partida">✕</button></div>`;
 }
 function renderHist() {
   const el = $("#hist"), ms = S.getState().matches, evs = S.getState().events.slice().sort((a, b) => b.date - a.date);
-  const tabs = `<div class="seg c2 tabs" role="tablist"><button type="button" role="tab" data-ht="matches" class="${histTab === "matches" ? "on" : ""}">PARTIDAS (${ms.length})</button><button type="button" role="tab" data-ht="events" class="${histTab === "events" ? "on" : ""}">EVENTOS (${evs.length})</button></div>`;
+  // a aba conta só partidas jogadas (igual ao cabeçalho); ID e bye aparecem na lista e são explicados na contagem (U95-09)
+  const nPlayed = ms.filter(S.isPlayed).length, nKind = ms.length - nPlayed;
+  const count = nKind ? `<p class="m hcount">${ms.length} registros · ${nPlayed} partida${nPlayed !== 1 ? "s" : ""} jogada${nPlayed !== 1 ? "s" : ""} · ${nKind} ID/bye (fora das estatísticas)</p>` : "";
+  const tabs = `<div class="seg c2 tabs" role="tablist"><button type="button" role="tab" data-ht="matches" class="${histTab === "matches" ? "on" : ""}">PARTIDAS (${nPlayed})</button><button type="button" role="tab" data-ht="events" class="${histTab === "events" ? "on" : ""}">EVENTOS (${evs.length})</button></div>`;
   if (histTab === "events") {
     const types = [...new Set(evs.map((e) => e.type))];
     const summary = types.length ? `<div class="card"><h2>Por tipo de evento</h2>${types.map((t) => {
       const es = evs.filter((e) => e.type === t), recs = es.map(eventRecord);
       const w = recs.reduce((a, r) => a + r.w, 0), l = recs.reduce((a, r) => a + r.l, 0), d = recs.reduce((a, r) => a + r.d, 0);
       const places = es.map((e) => e.placement).filter(Boolean), tops = es.filter((e) => e.topCut).length;
-      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + Math.min(...places) + "º · média: " + (places.reduce((a, b) => a + b, 0) / places.length).toFixed(1) + "º" : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${w}-${l}${d ? "-" + d : ""}</div><div class="pc">${w + l + d ? Math.round((w / (w + l + d)) * 100) + "%" : "—"}</div></div>`;
+      // a porcentagem é win rate: ID e bye ficam fora (o recorde ao lado continua com eles)
+      const pl = recs.flatMap((r) => r.matches).filter(S.isPlayed), pw = pl.filter((m) => m.result === "W").length;
+      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + ord(Math.min(...places)) : ""}${places.length > 1 ? " · média: " + ord((places.reduce((a, b) => a + b, 0) / places.length).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${recHTML({ w, l, d })}</div><div class="pc">${pl.length ? Math.round((pw / pl.length) * 100) + "%" : "—"}</div></div>`;
     }).join("")}</div>` : "";
     el.innerHTML = tabs + summary + `<div class="card"><h2>Eventos</h2>${evs.length ? evs.map((ev) => {
       const r = eventRecord(ev), dk = ev.deckId ? S.deck(ev.deckId) : null;
-      return `<div class="evr ${ev.status}"><div class="b"><span class="tag">${esc(ev.type)}</span><b>${esc(ev.name)}</b>${ev.status === "open" ? ' <span class="live-dot">em andamento</span>' : ""}
+      return `<div class="evr ${ev.status === "open" ? "open" : "closed"}"><div class="b"><span class="tag">${esc(ev.type)}</span><b>${esc(ev.name)}</b>${ev.status === "open" ? ' <span class="live-dot">em andamento</span>' : ""}
         <div class="m">${fmtDate(ev.date)}${ev.place ? " · " + esc(ev.place) : ""}${dk ? " · " + esc(dk.name) : ""}</div>
-        <div class="evs"><b>${r.w}-${r.l}${r.d ? "-" + r.d : ""}</b>${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
-        ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${m.result}" title="Rodada ${m.event.round}: ${RES[m.result]} vs ${esc(m.opp)}">R${m.event.round || "?"} ${RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
+        <div class="evs"><b>${recTxt(r)}</b>${r.d ? ' <span class="vde">V–D–E</span>' : ""}${ev.placement ? ` · ${ord(ev.placement)}${ev.players ? " de " + esc(ev.players) : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
+        ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${esc(m.result)}${m.kind ? " k" : ""}" title="Rodada ${esc(m.event.round || "?")}: ${m.kind ? KIND_LABEL[m.kind] + " · " : RES[m.result] + " · "}${esc(roundText(m))}">R${esc(m.event.round || "?")} ${m.kind ? KIND_LABEL[m.kind] : RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
         ${ev.note ? `<div class="m">${esc(ev.note)}</div>` : ""}</div>
-        <div class="evbtns">${r.n ? `<button class="x" data-evshare="${ev.id}" aria-label="Card para compartilhar" title="Card para compartilhar">⇪</button>` : ""}${ev.status === "open" ? `<button class="btn" data-evclose="${ev.id}" type="button">Encerrar</button>` : `<button class="x" data-evdel="${ev.id}" aria-label="Apagar evento">✕</button>`}</div></div>`;
+        <div class="evbtns">${r.n ? `<button class="x" data-evshare="${esc(ev.id)}" aria-label="Card para compartilhar" title="Card para compartilhar">⇪</button>` : ""}${ev.status === "open" ? `<button class="btn" data-evclose="${esc(ev.id)}" type="button">Encerrar</button>` : `<button class="x" data-evdel="${esc(ev.id)}" aria-label="Apagar evento">✕</button>`}</div></div>`;
     }).join("") : '<p class="m">Nenhum evento ainda. Comece um na tela Registrar.</p>'}
     ${S.openEvent() ? "" : '<button class="btn pri" id="ev-new" type="button" style="margin-top:12px">Começar evento</button>'}</div>`;
     return;
   }
-  el.innerHTML = tabs + (ms.length ? `<div class="card"><h2>Histórico</h2>${ms.slice().reverse().map(matchRow).join("")}</div>` : `<div class="card"><h2>Histórico</h2><p class="m">Nenhuma partida registrada.</p><button class="btn pri" id="hi-go-add" type="button" style="margin-top:4px">Registrar partida</button></div>`);
+  el.innerHTML = tabs + (ms.length ? `<div class="card"><h2>Histórico</h2>${count}${ms.slice().reverse().map(matchRow).join("")}</div>` : `<div class="card"><h2>Histórico</h2><p class="m">Nenhuma partida registrada.</p><button class="btn pri" id="hi-go-add" type="button" style="margin-top:4px">Registrar partida</button></div>`);
 }
 function bindHist() {
   $("#hist").addEventListener("click", async (e) => {
@@ -60,10 +80,10 @@ function bindHist() {
     if (b.dataset.ed) return editMatch(b.dataset.ed);
     if (b.dataset.del) {
       const m = S.getState().matches.find((x) => x.id === b.dataset.del); if (!m) return;
-      if (!(await confirmBox("Apagar partida?", `${RES[m.result]} contra ${m.opp} em ${fmtDate(m.playedAt)}.`, "Apagar", true))) return;
+      if (!(await confirmBox(m.kind ? "Apagar rodada?" : "Apagar partida?", `${matchTitle(m)} em ${fmtDate(m.playedAt)}.`, "Apagar", true))) return;
       const copy = JSON.parse(JSON.stringify(m));
       if (!(await S.deleteMatch(m.id))) return;
-      toast(`${RES[m.result]} contra ${m.opp} apagada`, { label: "Desfazer", fn: async () => { if (await S.saveMatch(copy)) toast("Partida restaurada"); } }, 8000);
+      toast(`${matchTitle(m)} apagad${m.kind === "bye" ? "o" : m.kind ? "o" : "a"}`, { label: "Desfazer", fn: async () => { if (await S.saveMatch(copy)) toast("Partida restaurada"); } }, 8000);
       return;
     }
     if (b.dataset.evshare) { const ev = S.evt(b.dataset.evshare); if (ev) { const { shareEvent } = await import("./share.js"); await shareEvent(ev); } return; }
@@ -77,7 +97,33 @@ function bindHist() {
 }
 
 // ================= Mais =================
-let moreView = "menu", editDeck = null;
+let moreView = "menu", editDeck = null, editDeckOrig = "";
+// Abre o editor de deck e guarda uma foto do que está na tela, para saber depois se houve alteração.
+function openDeckEditor(d, show = renderMore) {
+  editDeck = d; moreView = "deck"; show();
+  collectDeck(); editDeckOrig = JSON.stringify(editDeck);
+}
+const deckDirty = () => { if (moreView !== "deck" || !editDeck) return false; collectDeck(); return JSON.stringify(editDeck) !== editDeckOrig; };
+// Saída do editor por outro caminho (abas da barra inferior): com alteração não salva, pergunta antes.
+// Devolve true se pode sair (sem alteração, ou o jogador escolheu descartar).
+export async function leaveDeckEditor() {
+  if (!deckDirty()) return true;
+  const ok = await confirmBox("Descartar alterações?", "O deck tem alterações que ainda não foram salvas.", "Descartar", true);
+  if (ok) { moreView = "decks"; editDeck = null; }
+  return ok;
+}
+// Botão voltar do Android: subtela volta um nível (editor › decks › menu). Editor com alterações pergunta antes.
+export function moreBack() {
+  if (moreView === "menu") return false;
+  if (moreView === "deck") {
+    const leave = () => { moreView = "decks"; editDeck = null; renderMore(); window.scrollTo(0, 0); };
+    if (deckDirty()) confirmBox("Descartar alterações?", "O deck tem alterações que ainda não foram salvas.", "Descartar", true).then((ok) => { if (ok) leave(); });
+    else leave();
+    return true;
+  }
+  moreView = "menu"; editDeck = null; renderMore(); window.scrollTo(0, 0);
+  return true;
+}
 async function offerFile(filename, text) {
   if (window.RBTAndroid) {
     try { const r = window.RBTAndroid.saveText(filename, text); if (r === "ok") { toast("Salvo em Downloads: " + filename); return true; } } catch (e) { console.warn(e); }
@@ -140,7 +186,7 @@ function collectDeck() {
 
 function renderMore() {
   const el = $("#more"), st = S.getState();
-  const status = window.RBTAndroid && st.backend !== "conta" ? '<span class="status"><i></i>Salvo neste celular (app). Faça backup de vez em quando.</span>' : st.backend === "conta" ? '<span class="status ok"><i></i>Salvo na tua conta Claude e neste aparelho</span>' : '<span class="status"><i></i>Salvo só neste aparelho</span>';
+  const status = window.RBTAndroid && st.backend !== "conta" ? '<span class="status"><i></i>Salvo neste celular (app). Faça backup de vez em quando.</span>' : st.backend === "conta" ? '<span class="status ok"><i></i>Salvo na sua conta Claude e neste aparelho</span>' : '<span class="status"><i></i>Salvo só neste aparelho</span>';
   const back = `<button class="btn" data-go="menu" type="button" style="margin-bottom:12px">‹ Voltar</button>`;
   if (moreView === "menu") {
     const legacy = S.legacyMatches();
@@ -153,15 +199,15 @@ function renderMore() {
         <button class="li" id="go-journey">${IC.about}<span>Como usar o app</span>›</button>
         <button class="li" data-go="about">${IC.about}<span>Sobre</span>›</button>
       </div></div>
-      ${legacy.length ? `<div class="card"><h2>App anterior</h2><p class="m" style="margin-top:0">Encontrei ${legacy.length} partida${legacy.length > 1 ? "s" : ""} do app anterior. Elas não entram no histórico novo, mas tu pode guardar um backup.</p><div class="btns"><button class="btn" id="lg-dl" type="button">Baixar backup antigo</button><button class="btn" id="lg-cp" type="button">Copiar</button></div></div>` : ""}`;
+      ${legacy.length ? `<div class="card"><h2>App anterior</h2><p class="m" style="margin-top:0">Encontrei ${legacy.length} partida${legacy.length > 1 ? "s" : ""} do app anterior. Elas não entram no histórico novo, mas você pode guardar um backup.</p><div class="btns"><button class="btn" id="lg-dl" type="button">Baixar backup antigo</button><button class="btn" id="lg-cp" type="button">Copiar</button></div></div>` : ""}`;
     return;
   }
   if (moreView === "decks") {
     const ds = st.decks.slice().sort((a, b) => (a.archived - b.archived) || a.name.localeCompare(b.name));
-    el.innerHTML = back + `<div class="card"><h2>Meus decks</h2>${ds.length ? ds.map((d) => {
-      const ms = st.matches.filter((m) => m.deckId === d.id), r = record(ms), last = (d.versions || [])[d.versions.length - 1];
-      return `<button class="li dkrow${d.archived ? " arch" : ""}" data-dk="${d.id}" type="button">${avatar(d.legend, 40)}<span><b>${esc(d.name)}</b><span class="m" style="display:block">${esc(d.legend)} · ${last ? esc(last.name) : "sem versão"}${d.archived ? " · arquivado" : ""}</span></span><span class="m">${r.n ? r.w + "-" + r.l + (r.d ? "-" + r.d : "") : ""}</span>›</button>`;
-    }).join("") : '<p class="m">Cadastre teus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
+    el.innerHTML = back + `<div class="card"><h2>Meus decks</h2>${ds.length ? '<div class="list">' + ds.map((d) => {
+      const ms = S.played().filter((m) => m.deckId === d.id), r = record(ms), last = (d.versions || [])[d.versions.length - 1];
+      return `<button class="li dkrow${d.archived ? " arch" : ""}" data-dk="${esc(d.id)}" type="button">${avatar(d.legend, 40)}<span class="dk-n"><b>${esc(d.name)}</b><span class="m">${esc(d.legend)} · ${last ? esc(last.name) : "sem versão"}${d.archived ? " · arquivado" : ""}</span></span><span class="m dk-r">${r.n ? r.w + "–" + r.l + (r.d ? "–" + r.d : "") : ""}</span><i aria-hidden="true">›</i></button>`;
+    }).join("") + "</div>" : '<p class="m">Cadastre seus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
     <button class="btn pri" id="dk-new" type="button" style="margin-top:12px">＋ Novo deck</button></div>`;
     return;
   }
@@ -170,7 +216,7 @@ function renderMore() {
     const names = new Set([...Object.keys(LEGENDS), ...Object.keys(st.settings.customLegends || {}), ...st.matches.flatMap((m) => [m.my, m.opp])]);
     const list = [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
     const withImg = list.filter((n) => st.images[n]).length;
-    el.innerHTML = back + `<div class="card"><h2>Imagens das lendas</h2><p class="m" style="margin-top:0">Toque numa lenda para escolher uma imagem do teu aparelho. Ela aparece no confronto, no contador, no histórico e nas estatísticas. ${withImg} de ${list.length} com imagem.</p>
+    el.innerHTML = back + `<div class="card"><h2>Imagens das lendas</h2><p class="m" style="margin-top:0">Toque numa lenda para escolher uma imagem do seu aparelho. Ela aparece no confronto, no contador, no histórico e nas estatísticas. ${withImg} de ${list.length} com imagem.</p>
       <input id="lg-q" placeholder="Buscar lenda…" autocomplete="off" aria-label="Buscar lenda">
       <div class="lgrid">${list.map((n) => `<button type="button" class="lgi${st.images[n] ? " has" : ""}" data-limg="${esc(n)}">${avatar(n, 56)}<span>${esc(n)}</span></button>`).join("")}</div></div>`;
     return;
@@ -213,10 +259,12 @@ function bindMore() {
       if (t) { prefs.theme = t; savePrefs(); applyTheme(); renderMore(); }
       return;
     }
+    // "‹ Decks" no editor: mesma regra do voltar do Android (alteração não salva pergunta antes)
+    if (b.dataset.go && moreView === "deck") { moreBack(); return; }
     if (b.dataset.go) { moreView = b.dataset.go; editDeck = null; renderMore(); window.scrollTo(0, 0); return; }
     if (b.id === "go-journey") { const { startJourney } = await import("./onboard.js"); startJourney({ first: false }); return; }
-    if (b.id === "dk-new") { editDeck = { id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 }; moreView = "deck"; renderMore(); return; }
-    if (b.dataset.dk) { editDeck = JSON.parse(JSON.stringify(S.deck(b.dataset.dk))); moreView = "deck"; renderMore(); return; }
+    if (b.id === "dk-new") { openDeckEditor({ id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 }); return; }
+    if (b.dataset.dk) { const dk = S.deck(b.dataset.dk); if (dk) openDeckEditor(JSON.parse(JSON.stringify(dk))); return; }
     if (b.id === "dk-addv") { collectDeck(); editDeck.versions.push({ id: S.newKey("v"), name: "v" + (editDeck.versions.length + 1), note: "", createdAt: Date.now() }); renderMore(); return; }
     if (b.id === "dk-save") {
       collectDeck();
@@ -278,12 +326,12 @@ async function imageEditor(name) {
   };
   const v = await dialog({
     title: name,
-    body: `<div class="imged"><div class="imgprev">${cur ? `<img src="${cur}" alt="">` : ""}<canvas id="ie-cv" width="200" height="200"${cur ? ' class="hide"' : ""}></canvas></div>
+    body: `<div class="imged"><div class="imgprev">${cur ? `<img src="${esc(cur)}" alt="">` : ""}<canvas id="ie-cv" width="200" height="200"${cur ? ' class="hide"' : ""}></canvas></div>
       <label class="btn full filebtn">Escolher imagem<input id="ie-file" type="file" accept="image/*"></label>
       <div id="ie-adj" class="hide"><label for="ie-z">Zoom</label><input id="ie-z" type="range" min="1" max="3" step="0.02" value="1">
       <label for="ie-x">Horizontal</label><input id="ie-x" type="range" min="-1" max="1" step="0.02" value="0">
       <label for="ie-y">Vertical</label><input id="ie-y" type="range" min="-1" max="1" step="0.02" value="0"></div>
-      <p class="m">A imagem fica salva só no teu app.</p>`,
+      <p class="m">A imagem fica salva só no seu app.</p>`,
     actions: [...(cur ? [{ label: "Remover", value: "remove", danger: true }] : []), { label: "Cancelar", value: null },
       { label: "Salvar", primary: true, value: () => { if (!img) return null; const out = document.createElement("canvas"); out.width = out.height = 160; draw(out, 160); return out.toDataURL("image/jpeg", 0.82); } }],
     onOpen: (r) => {
@@ -324,8 +372,7 @@ export async function importChooser() {
 }
 // Abre o editor com um deck novo (atalho da jornada de boas-vindas).
 export function newDeckFlow() {
-  editDeck = { id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 };
-  moreView = "deck"; showView("more", { keep: true });
+  openDeckEditor({ id: S.newKey("d"), name: "", legend: "", battlefields: ["", "", ""], set: S.setForDate(Date.now()), archived: false, versions: [{ id: S.newKey("v"), name: "v1", note: "", createdAt: Date.now() }], createdAt: 0 }, () => showView("more", { keep: true }));
 }
 
 async function doImport(txt) {
@@ -333,17 +380,31 @@ async function doImport(txt) {
   try { o = JSON.parse(txt); } catch (e) { await dialog({ title: "Arquivo inválido", body: "<p>Não consegui ler esse backup. Confira se é o arquivo .json exportado pelo app.</p>" }); return; }
   const list = Array.isArray(o) ? o : o && Array.isArray(o.matches) ? o.matches : null;
   if (!list) { await dialog({ title: "Arquivo inválido", body: "<p>Esse arquivo não tem partidas.</p>" }); return; }
-  const ok = await confirmBox("Importar backup?", `${list.length} partida${list.length !== 1 ? "s" : ""} no arquivo${o.decks ? ", " + o.decks.length + " deck(s)" : ""}${o.events ? ", " + o.events.length + " evento(s)" : ""}. O que é novo entra; o repetido fica com a versão mais recente.`, "Importar");
+  // backup de uma versão mais nova (Q95-05): esta versão pode não entender tudo e ignorar parte dos registros
+  if (o && !Array.isArray(o) && typeof o.appVersion === "string" && S.cmpVer(o.appVersion, APP_VER) > 0) {
+    const go = await dialog({ title: "Backup de uma versão mais nova",
+      body: `<p>Este backup foi feito na versão <b>${esc(o.appVersion)}</b> e este app está na <b>${esc(APP_VER)}</b>.</p><p>Registros que esta versão não conhece (por exemplo ID e bye, em versões antigas) podem ser ignorados ou entrar diferentes. O melhor é atualizar o app antes de importar. Guarde este arquivo: ele continua completo.</p>`,
+      actions: [{ label: "Cancelar", value: false }, { label: "Importar mesmo assim", value: true, danger: true }] });
+    if (!go) return;
+  }
+  const ok = await confirmBox("Importar backup?", `${list.length} partida${list.length !== 1 ? "s" : ""} no arquivo${Array.isArray(o.decks) ? ", " + o.decks.length + " deck(s)" : ""}${Array.isArray(o.events) ? ", " + o.events.length + " evento(s)" : ""}. O que é novo entra; o repetido fica com a versão mais recente.`, "Importar");
   if (!ok) return;
-  if (!Array.isArray(o)) await S.importLists(o);
-  const r = await S.importMatches(list);
+  S.prepareImport(o, list);
+  let r, badLists = 0;
+  try {
+    badLists = Array.isArray(o) ? 0 : await S.importLists(o);
+    r = await S.importMatches(list);
+  } finally { r = r || { added: 0, updated: 0, ignored: 0, repeated: 0, ok: false }; r.renamed = S.finishImport(); }
+  r.ignored += badLists; // decks, eventos e imagens inválidos também contam como ignorados
   const cur = S.getState().settings, inc = (o && o.settings) || {};
   const patch = {};
   if (inc.customLegends && typeof inc.customLegends === "object") patch.customLegends = { ...inc.customLegends, ...(cur.customLegends || {}) };
   if (Array.isArray(inc.sets) && inc.sets.length) { const mine = cur.sets && cur.sets.length ? cur.sets : null; patch.sets = mine ? [...mine, ...inc.sets.filter((s) => s && s.id && !mine.some((x) => x.id === s.id))] : inc.sets; }
   if (Object.keys(patch).length) await S.saveSettings(patch);
   if (!r.ok) { await dialog({ title: "Importação incompleta", body: "<p>O aparelho ficou sem espaço e as partidas não foram salvas. Remova fotos de lendas em Mais e tente de novo.</p>" }); return; }
-  toast(`${r.added} nova${r.added !== 1 ? "s" : ""}, ${r.updated} atualizada${r.updated !== 1 ? "s" : ""}${r.ignored ? `, ${r.ignored} ignorada${r.ignored !== 1 ? "s" : ""} (inválidas)` : ""}`, null, 5000);
+  // id trocado não é registro inválido: entra normalmente e só é contado à parte
+  const pl = (n, a, b) => n + " " + (n !== 1 ? b : a);
+  toast(`${pl(r.added, "nova", "novas")}, ${pl(r.updated, "atualizada", "atualizadas")}${r.ignored ? `, ${pl(r.ignored, "ignorada (inválida)", "ignoradas (inválidas)")}` : ""}${r.repeated ? `, ${pl(r.repeated, "repetida no arquivo", "repetidas no arquivo")}` : ""}${r.renamed ? ` · ${pl(r.renamed, "id ajustado", "ids ajustados")}` : ""}`, null, 6000);
 }
 async function addSet() {
   const v = await dialog({

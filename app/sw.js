@@ -1,6 +1,6 @@
 // Service worker para o modo offline (K1). Só roda quando o app é servido
 // numa página própria ou empacotado como APK; dentro do claude.ai é ignorado.
-const CACHE = "rbt-v0.9.2";
+const CACHE = "rbt-v0.9.5";
 const FILES = ["./", "index.html", "css/app.css", "js/app.js", "js/data.js", "js/store.js", "js/stats.js", "js/ui.js", "js/core.js", "js/register.js", "js/live.js", "js/views.js", "js/analysis.js", "js/share.js", "js/onboard.js",
   "icon.svg", "manifest.webmanifest", "fonts/press-start-2p-latin-400-normal.woff2", "fonts/jersey-10-latin-400-normal.woff2"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));
