@@ -1071,3 +1071,6 @@ body.sheet-on{overflow:hidden}
 .vde{font:400 15px var(--f-b);letter-spacing:.04em;color:var(--mut);white-space:nowrap}
 .hcount{margin:-4px 0 8px}
 .evbar .ev-r{white-space:nowrap}
+/* teclado aberto (U95-06): barra SALVAR e navegação saem da frente do campo focado */
+body.kbd-on .savebar,body.kbd-on nav{display:none}
+body.kbd-on.home-on.sbar-on{padding-bottom:24px}

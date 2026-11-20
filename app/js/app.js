@@ -49,6 +49,7 @@ function boot() {
   navH(); addEventListener("resize", navH);
   try { new ResizeObserver(navH).observe(document.querySelector("nav")); } catch (e) {} // a fonte carrega depois e muda a altura
   initRegister(); initLive(); initViews(); initAnalysis();
+  watchKeyboard();
   // seletor de battlefield (botões): escolhe, desmarca ou adiciona outro
   document.addEventListener("click", async (e) => {
     const b = e.target.closest(".bfp button"); if (!b) return;
@@ -171,5 +172,25 @@ function androidBridge() {
     if (v !== "add") { showView("add"); return true; }
     return false;
   };
+}
+// Teclado virtual (U95-06): com um campo de texto focado e a janela encolhida (adjustResize no APK, ou
+// visualViewport no navegador), a barra SALVAR e a navegação somem para não cobrir o campo; o campo é
+// trazido para a área visível. Fecha o teclado (ou tira o foco): tudo volta.
+const TYPING = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=button]):not([type=submit]):not([type=range]):not([type=color]):not([type=date]):not([type=datetime-local]):not([type=file])';
+function watchKeyboard() {
+  const vv = window.visualViewport, vh = () => (vv ? vv.height : innerHeight);
+  let baseH = vh(), baseW = innerWidth;
+  const check = () => {
+    if (innerWidth !== baseW) { baseW = innerWidth; baseH = vh(); } // girou a tela: nova referência
+    const h = vh(); if (h > baseH) baseH = h;
+    const a = document.activeElement, typing = !!(a && a.matches && a.matches(TYPING));
+    const on = typing && h < baseH * 0.8;
+    if (on !== document.body.classList.contains("kbd-on")) document.body.classList.toggle("kbd-on", on);
+    if (on) requestAnimationFrame(() => { const r = a.getBoundingClientRect(); if (r.bottom > vh() - 8 || r.top < 0) a.scrollIntoView({ block: "center" }); });
+  };
+  addEventListener("resize", check);
+  if (vv) vv.addEventListener("resize", check);
+  document.addEventListener("focusin", check);
+  document.addEventListener("focusout", () => setTimeout(check, 0));
 }
 boot();
