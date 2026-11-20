@@ -3,7 +3,7 @@ import { DOMAINS, EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { record, gameRecord, group, applyFilters, insights, toCSV, gameRows, firstLabel } from "./stats.js";
 import { esc, $, $$, avatar, domainPair, domainIcon, legendColors, dialog, confirmBox, toast, RUNE, setBadge, ord } from "./ui.js";
-import { RES, RES_SHORT, APP_VERSION, prefs, savePrefs, applyTheme, setName, fmtDate, eventRecord, registerView, showView, knownBattlefields, canonBf, KIND_LABEL, roundText } from "./core.js";
+import { RES, RES_SHORT, APP_VERSION, prefs, savePrefs, applyTheme, setName, fmtDate, eventRecord, registerView, showView, knownBattlefields, canonBf, KIND_LABEL, roundText, recTxt, recHTML } from "./core.js";
 import { editMatch, legendOptions, bindPickers, startEvent, closeEvent } from "./register.js";
 import { LEGENDS } from "./data.js";
 
@@ -44,7 +44,10 @@ function matchRow(m) {
 }
 function renderHist() {
   const el = $("#hist"), ms = S.getState().matches, evs = S.getState().events.slice().sort((a, b) => b.date - a.date);
-  const tabs = `<div class="seg c2 tabs" role="tablist"><button type="button" role="tab" data-ht="matches" class="${histTab === "matches" ? "on" : ""}">PARTIDAS (${ms.length})</button><button type="button" role="tab" data-ht="events" class="${histTab === "events" ? "on" : ""}">EVENTOS (${evs.length})</button></div>`;
+  // a aba conta só partidas jogadas (igual ao cabeçalho); ID e bye aparecem na lista e são explicados na contagem (U95-09)
+  const nPlayed = ms.filter(S.isPlayed).length, nKind = ms.length - nPlayed;
+  const count = nKind ? `<p class="m hcount">${ms.length} registros · ${nPlayed} partida${nPlayed !== 1 ? "s" : ""} jogada${nPlayed !== 1 ? "s" : ""} · ${nKind} ID/bye (fora das estatísticas)</p>` : "";
+  const tabs = `<div class="seg c2 tabs" role="tablist"><button type="button" role="tab" data-ht="matches" class="${histTab === "matches" ? "on" : ""}">PARTIDAS (${nPlayed})</button><button type="button" role="tab" data-ht="events" class="${histTab === "events" ? "on" : ""}">EVENTOS (${evs.length})</button></div>`;
   if (histTab === "events") {
     const types = [...new Set(evs.map((e) => e.type))];
     const summary = types.length ? `<div class="card"><h2>Por tipo de evento</h2>${types.map((t) => {
@@ -53,13 +56,13 @@ function renderHist() {
       const places = es.map((e) => e.placement).filter(Boolean), tops = es.filter((e) => e.topCut).length;
       // a porcentagem é win rate: ID e bye ficam fora (o recorde ao lado continua com eles)
       const pl = recs.flatMap((r) => r.matches).filter(S.isPlayed), pw = pl.filter((m) => m.result === "W").length;
-      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + ord(Math.min(...places)) : ""}${places.length > 1 ? " · média: " + ord((places.reduce((a, b) => a + b, 0) / places.length).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${w}-${l}${d ? "-" + d : ""}</div><div class="pc">${pl.length ? Math.round((pw / pl.length) * 100) + "%" : "—"}</div></div>`;
+      return `<div class="st"><div class="nm">${esc(t)}<div class="m">${es.length} evento${es.length > 1 ? "s" : ""}${places.length ? " · melhor: " + ord(Math.min(...places)) : ""}${places.length > 1 ? " · média: " + ord((places.reduce((a, b) => a + b, 0) / places.length).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : ""}${tops ? " · " + tops + " top cut" : ""}</div></div><div class="m">${recHTML({ w, l, d })}</div><div class="pc">${pl.length ? Math.round((pw / pl.length) * 100) + "%" : "—"}</div></div>`;
     }).join("")}</div>` : "";
     el.innerHTML = tabs + summary + `<div class="card"><h2>Eventos</h2>${evs.length ? evs.map((ev) => {
       const r = eventRecord(ev), dk = ev.deckId ? S.deck(ev.deckId) : null;
       return `<div class="evr ${ev.status === "open" ? "open" : "closed"}"><div class="b"><span class="tag">${esc(ev.type)}</span><b>${esc(ev.name)}</b>${ev.status === "open" ? ' <span class="live-dot">em andamento</span>' : ""}
         <div class="m">${fmtDate(ev.date)}${ev.place ? " · " + esc(ev.place) : ""}${dk ? " · " + esc(dk.name) : ""}</div>
-        <div class="evs"><b>${r.w}-${r.l}${r.d ? "-" + r.d : ""}</b>${ev.placement ? ` · ${ord(ev.placement)}${ev.players ? " de " + esc(ev.players) : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
+        <div class="evs"><b>${recTxt(r)}</b>${r.d ? ' <span class="vde">V–D–E</span>' : ""}${ev.placement ? ` · ${ord(ev.placement)}${ev.players ? " de " + esc(ev.players) : ""}` : ""}${ev.topCut ? " · top cut" : ""}</div>
         ${r.matches.length ? `<div class="rchips">${r.matches.sort((a, b) => (a.event.round || 0) - (b.event.round || 0)).map((m) => `<span class="rchip ${esc(m.result)}${m.kind ? " k" : ""}" title="Rodada ${esc(m.event.round || "?")}: ${m.kind ? KIND_LABEL[m.kind] + " · " : RES[m.result] + " · "}${esc(roundText(m))}">R${esc(m.event.round || "?")} ${m.kind ? KIND_LABEL[m.kind] : RES_SHORT[m.result]}</span>`).join("")}</div>` : ""}
         ${ev.note ? `<div class="m">${esc(ev.note)}</div>` : ""}</div>
         <div class="evbtns">${r.n ? `<button class="x" data-evshare="${esc(ev.id)}" aria-label="Card para compartilhar" title="Card para compartilhar">⇪</button>` : ""}${ev.status === "open" ? `<button class="btn" data-evclose="${esc(ev.id)}" type="button">Encerrar</button>` : `<button class="x" data-evdel="${esc(ev.id)}" aria-label="Apagar evento">✕</button>`}</div></div>`;
@@ -67,7 +70,7 @@ function renderHist() {
     ${S.openEvent() ? "" : '<button class="btn pri" id="ev-new" type="button" style="margin-top:12px">Começar evento</button>'}</div>`;
     return;
   }
-  el.innerHTML = tabs + (ms.length ? `<div class="card"><h2>Histórico</h2>${ms.slice().reverse().map(matchRow).join("")}</div>` : `<div class="card"><h2>Histórico</h2><p class="m">Nenhuma partida registrada.</p><button class="btn pri" id="hi-go-add" type="button" style="margin-top:4px">Registrar partida</button></div>`);
+  el.innerHTML = tabs + (ms.length ? `<div class="card"><h2>Histórico</h2>${count}${ms.slice().reverse().map(matchRow).join("")}</div>` : `<div class="card"><h2>Histórico</h2><p class="m">Nenhuma partida registrada.</p><button class="btn pri" id="hi-go-add" type="button" style="margin-top:4px">Registrar partida</button></div>`);
 }
 function bindHist() {
   $("#hist").addEventListener("click", async (e) => {

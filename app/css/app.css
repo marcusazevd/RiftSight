@@ -1064,3 +1064,10 @@ body.sheet-on{overflow:hidden}
   .gline .gr{gap:4px}
   .gline .gr button{font-size:18px}
 }
+/* recorde do evento: "você está 2–1–1  V–D–E" (U95-09, Q95-10) */
+.evbar .ev-l{font:400 19px/1.15 var(--f-b);margin:2px 0}
+.evbar .ev-l b{font-weight:400}
+.evbar .ev-rec{color:var(--gold)}
+.vde{font:400 15px var(--f-b);letter-spacing:.04em;color:var(--mut);white-space:nowrap}
+.hcount{margin:-4px 0 8px}
+.evbar .ev-r{white-space:nowrap}

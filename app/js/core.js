@@ -124,6 +124,10 @@ export function eventRecord(ev) {
 }
 // Recorde no formato V–D–E (o E só aparece quando houver empate ou ID).
 export const recTxt = (r) => `${r.w}–${r.l}${r.d ? "–" + r.d : ""}`;
+// Legenda do recorde quando há empate/ID (3–1–1 · V–D–E); sem empate fica só "3–1".
+export const recLegend = (r) => (r.d ? "V–D–E" : "");
+export const recPlain = (r) => recTxt(r) + (r.d ? " (V–D–E)" : "");
+export const recHTML = (r) => `${recTxt(r)}${r.d ? ' <span class="vde">V–D–E</span>' : ""}`;
 export const KIND_LABEL = { id: "ID", bye: "BYE" };
 // Texto curto de uma rodada: "2–1 vs Viktor", "ID · vs Kai'Sa · sem games", "BYE · sem oponente".
 export function roundText(m) {

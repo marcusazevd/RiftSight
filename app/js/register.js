@@ -3,7 +3,7 @@ import { DOMAINS, LEGENDS, EVENT_TYPES, BO3_EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendInfo, legendColors, dialog, confirmBox, promptBox, toast, RUNE } from "./ui.js";
 import { backupBanner, handleBackupBanner } from "./views.js";
-import { RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownMyBattlefields, resultFromGames, eventRecord, registerView, showView, currentView, readLive, canonBf, bfKey, allBattlefields, KIND_LABEL, recTxt, roundText } from "./core.js";
+import { RES, prefs, savePrefs, toLocalInput, toLocalDate, fromLocalInput, fmtDate, knownMyBattlefields, resultFromGames, eventRecord, registerView, showView, currentView, readLive, canonBf, bfKey, allBattlefields, KIND_LABEL, recTxt, recHTML, recPlain, roundText } from "./core.js";
 
 let F;
 export function blankForm() {
@@ -162,7 +162,7 @@ export async function closeEvent(ev) {
   const r = eventRecord(ev);
   const v = await dialog({
     title: "Encerrar " + ev.name,
-    body: `<p>Recorde: <b>${r.w}-${r.l}${r.d ? "-" + r.d : ""}</b> em ${r.n} rodada${r.n !== 1 ? "s" : ""}.</p>
+    body: `<p>Recorde: <b>${recTxt(r)}</b>${r.d ? " (V–D–E)" : ""} em ${r.n} rodada${r.n !== 1 ? "s" : ""}.</p>
       <div class="row"><div><label for="cp">Colocação final</label><input id="cp" type="number" min="1" inputmode="numeric" placeholder="Ex.: 3"></div>
       <div><label for="cj">Jogadores</label><input id="cj" type="number" min="2" inputmode="numeric"></div></div>
       <label class="ck"><input type="checkbox" id="ct"> Fiquei no top cut</label>
@@ -178,11 +178,13 @@ export function nextRound(eventId) {
   const ms = S.getState().matches.filter((m) => m.event && m.event.eventId === eventId);
   return ms.reduce((a, m) => Math.max(a, m.event.round || 0), 0) + 1;
 }
+// Banner do evento como no mockup: "Rodada 4 · você está 2–1–1 V–D–E" (U95-09, Q95-10).
 function eventBanner() {
   const ev = S.openEvent();
   if (!ev) return "";
   const r = eventRecord(ev);
-  return `<div class="evbar"><div><span class="tag">EVENTO EM ANDAMENTO</span><br><b>${esc(ev.name)}</b> <span class="m">· ${esc(ev.type)}</span><div class="m">Rodada ${esc(nextRound(ev.id))} · ${r.w}-${r.l}${r.d ? "-" + r.d : ""}${ev.place ? " · " + esc(ev.place) : ""}</div></div><button class="btn" type="button" id="ev-close">Encerrar</button></div>`;
+  const sub = [ev.name, ev.name.startsWith(ev.type) ? "" : ev.type, ev.place].filter(Boolean).map(esc).join(" · ");
+  return `<div class="evbar"><div><span class="tag">EVENTO EM ANDAMENTO</span><div class="ev-l"><b>Rodada ${esc(nextRound(ev.id))}</b> · <span class="ev-r">você está <b class="ev-rec">${recTxt(r)}</b>${r.d ? ' <span class="vde">V–D–E</span>' : ""}</span></div><div class="m">${sub}</div></div><button class="btn" type="button" id="ev-close">Encerrar</button></div>`;
 }
 
 // faixa de status: recorde, últimas 5 e sequência
@@ -275,7 +277,7 @@ function roundsHTML(ev) {
 }
 function kindBody(ev) {
   return `${F.kind === "id" ? `<div class="kopp"><div class="pick" id="opp" data-side="opp">${pickerHTML("opp", F.opp, "Contra quem? (opcional)", false, null, "Escolher a lenda")}</div>${F.opp ? '<button type="button" class="x" id="f-noopp" aria-label="Tirar o oponente">✕</button>' : ""}</div>` : ""}
-    <div class="kinfo"><span>${F.kind === "bye" ? "Conta como vitória no recorde do evento" : "Conta no recorde do evento"}: <b>${projectedRecord(ev)}</b></span><span class="m">Fica fora do win rate, dos matchups e dos battlefields.</span></div>
+    <div class="kinfo"><span>${F.kind === "bye" ? "Conta como vitória no recorde do evento" : "Conta no recorde do evento"}: <b>${projectedRecord(ev)}</b> <span class="vde">V–D–E</span></span><span class="m">Fica fora do win rate, dos matchups e dos battlefields.</span></div>
     ${ev ? roundsHTML(ev) : ""}`;
 }
 
@@ -732,7 +734,7 @@ export function savedToast(m, restore = null, form = false) {
   const rd = ev && m.event.round ? "R" + m.event.round + " · " : "";
   // ID: "R4 · ID vs Kai'Sa"; bye: "R5 · BYE (vitória)"
   let html = esc(m.kind === "bye" ? rd + "BYE (vitória)" : m.kind === "id" ? rd + "ID" + (m.opp ? " vs " + m.opp : " (empate combinado)") : rd + RES[m.result] + (sc ? " " + sc : "") + " vs " + m.opp);
-  if (ev) { const r = eventRecord(ev); html += ` · <span class="nw">evento ${recTxt(r)}</span>`; }
+  if (ev) { const r = eventRecord(ev); html += ` · <span class="nw">evento ${recHTML(r)}</span>`; }
   const seq = ++svSeq;
   SV = { seq, id: m.id, m, html, until: Date.now() + UNDO_MS, restore, form };
   clearTimeout(svT); svT = setTimeout(() => { if (SV && SV.seq === seq) paintStrip(); }, UNDO_MS + 30);

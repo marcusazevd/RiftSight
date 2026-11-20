@@ -78,7 +78,8 @@ function badge(ctx, id, x, y) {
   ctx.fillStyle = s.color + "26"; ctx.fillRect(x, y - 30, w, 42); ctx.strokeStyle = s.color; ctx.lineWidth = 3; ctx.strokeRect(x, y - 30, w, 42);
   text(ctx, s.name.toUpperCase(), x + 16, y + 1, `20px ${D}`, s.color); return w;
 }
-function recStr(r) { return `${r.w}-${r.l}${r.d ? "-" + r.d : ""}`; }
+// mesmo formato do app: travessão (3–1–1)
+function recStr(r) { return `${r.w}–${r.l}${r.d ? "–" + r.d : ""}`; }
 function bar(ctx, x, y, w, h, p, color) { ctx.fillStyle = C.bd; ctx.fillRect(x, y, w, h); ctx.fillStyle = color; ctx.fillRect(x, y, Math.round(w * p), h); }
 
 async function eventCanvas(ev) {
@@ -183,7 +184,7 @@ function eventText(ev) {
   const ms = r.matches.slice().sort((a, b) => (a.event.round || 0) - (b.event.round || 0));
   return [`🏆 ${ev.name} (${ev.type})${ev.place ? " — " + ev.place : ""}`,
     `${dk ? dk.name + " · " + dk.legend : (ms.find((m) => m.my) || {}).my || ""}`,
-    `Resultado: ${recStr(r)}${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}`,
+    `Resultado: ${recStr(r)}${r.d ? " (V–D–E)" : ""}${ev.placement ? ` · ${ev.placement}º${ev.players ? " de " + ev.players : ""}` : ""}${ev.topCut ? " · top cut" : ""}`,
     ...ms.map((m) => m.kind === "bye" ? `R${m.event.round || "?"} BYE` : m.kind === "id" ? `R${m.event.round || "?"} ID${m.opp ? " vs " + m.opp : ""}` : `R${m.event.round || "?"} ${RES_SHORT[m.result]} vs ${m.opp}${m.score ? " (" + m.score + ")" : ""}`)].filter(Boolean).join("\n");
 }
 function deckText(dk) {
