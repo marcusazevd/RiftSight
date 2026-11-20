@@ -332,10 +332,10 @@ function render() {
   if (!showKind) F.kind = "";
   const open = !!(F.editId || F.manual);
   const lv = readLive(), liveOn = !!(lv && lv.phase !== "setup");
-  el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}${savedStrip()}
+  el.innerHTML = `${F.editId ? "" : statusStrip()}${F.editId ? "" : liveOn ? '<div class="evbar live"><div><b>Partida em andamento</b><div class="m">O contador guardou o placar.</div></div><button class="btn pri" type="button" id="go-resume">Retomar</button></div>' : ""}${F.editId ? "" : eventBanner()}${SV && SV.form && open ? "" : savedStrip()}
   ${F.editId ? "" : `<div class="herorow"><button class="go big-go" id="go-live" type="button"><span>NOVA PARTIDA<small>Contador de pontos${F.eventId && S.evt(F.eventId) ? " · rodada " + nextRound(F.eventId) : ""}</small></span></button>${S.openEvent() ? "" : `<button class="evchip" type="button" id="ev-start"><b>＋</b>EVENTO</button>`}</div>
   <button class="manual-t${F.manual ? " open" : ""}" id="f-manual" type="button" aria-expanded="${!!F.manual}"><span>${S.openEvent() ? "Registrar rodada já jogada, ID ou bye" : "Registrar partida já jogada"}</span><i>${F.manual ? "▴" : "▾"}</i></button>`}
-  <div class="card mcard${open ? "" : " hide"}${F.kind ? " kind" : ""}" id="f-card">
+  ${SV && SV.form && open ? savedStrip() : ""}<div class="card mcard${open ? "" : " hide"}${F.kind ? " kind" : ""}" id="f-card">
     ${F.editId ? `<h2>${F.kind ? "Editar rodada" : "Editar partida"}</h2>` : ""}
     ${showKind ? kindHTML() : ""}
     ${F.kind ? kindBody(ev) : `<div class="mu compact"><div class="pick" id="my" data-side="my">${pickerHTML("my", F.my, myLabel(dk), true, F.deckId, myLabel(dk))}</div><div class="vs">VS</div><div class="pick" id="opp" data-side="opp">${pickerHTML("opp", F.opp, "Oponente", false, null, "Oponente")}</div></div>
@@ -690,8 +690,16 @@ async function commit(m, old) {
   // formulário novo, com os detalhes fechados: a próxima rodada começa limpa (e em "joguei")
   F = { ...blankForm(), manual: F.manual, details: false };
   if (wasEdit) { render(); toast(m.kind ? "Rodada atualizada" : "Partida atualizada"); showView("hist"); return; }
-  savedToast(m, () => { F = { ...snap, _fresh: false }; return true; });
-  window.scrollTo(0, 0); // de volta ao topo: banner do evento e recorde à vista
+  savedToast(m, () => { F = { ...snap, _fresh: false }; return true; }, true);
+  scrollToForm(); // o aviso (rodada, resultado, recorde do evento, Desfazer) fica logo acima do formulário novo
+}
+// Rola até o formulário aberto: o aviso pós-salvar (quando há) logo acima e os games acima da barra SALVAR (U95-05).
+// A faixa de status, o banner e o NOVA PARTIDA continuam na página, logo acima.
+export function scrollToForm() {
+  const card = document.getElementById("f-card");
+  if (!card || card.classList.contains("hide")) { window.scrollTo(0, 0); return; }
+  const sv = document.getElementById("svbar"), t = sv && sv.nextElementSibling === card ? sv : card;
+  window.scrollTo(0, Math.max(0, Math.round(t.getBoundingClientRect().top + window.scrollY - 8)));
 }
 
 // ---------- aviso "salvo" com Desfazer ----------
@@ -713,7 +721,7 @@ function paintStrip() {
 // Aviso depois de salvar: rodada, resultado, placar, oponente e recorde do evento, com Desfazer.
 // Ex.: "R3 · Vitória 2–1 vs Kai'Sa · evento 2–1". Desfazer apaga a partida recém-salva e devolve os dados:
 // restore() refaz o estado de antes (formulário preenchido ou resumo do contador) e devolve false se não deu.
-export function savedToast(m, restore = null) {
+export function savedToast(m, restore = null, form = false) {
   const ev = m.event && m.event.eventId ? S.evt(m.event.eventId) : null, g1 = m.games && m.games[0];
   const sc = m.score ? m.score.replace("-", "–") : m.format !== "bo3" && g1 && g1.points ? g1.points.me + "–" + g1.points.opp : "";
   const rd = ev && m.event.round ? "R" + m.event.round + " · " : "";
@@ -721,7 +729,7 @@ export function savedToast(m, restore = null) {
   let html = esc(m.kind === "bye" ? rd + "BYE (vitória)" : m.kind === "id" ? rd + "ID" + (m.opp ? " vs " + m.opp : " (empate combinado)") : rd + RES[m.result] + (sc ? " " + sc : "") + " vs " + m.opp);
   if (ev) { const r = eventRecord(ev); html += ` · <span class="nw">evento ${recTxt(r)}</span>`; }
   const seq = ++svSeq;
-  SV = { seq, id: m.id, m, html, until: Date.now() + UNDO_MS, restore };
+  SV = { seq, id: m.id, m, html, until: Date.now() + UNDO_MS, restore, form };
   clearTimeout(svT); svT = setTimeout(() => { if (SV && SV.seq === seq) paintStrip(); }, UNDO_MS + 30);
   if (currentView() === "add") render();
 }
@@ -735,9 +743,9 @@ async function undoSaved() {
   if (back === "live") return; // voltou para o resumo do contador
   if (!back) F = { ...formFromMatch(sv.m), editId: null, manual: true, details: true };
   F.manual = true; prefs.manual = 1; savePrefs();
-  SV = { seq: ++svSeq, id: null, info: true, html: "Desfeito: a partida voltou para o formulário. Corrija e salve de novo." };
+  SV = { seq: ++svSeq, id: null, info: true, form: true, html: "Desfeito: a partida voltou para o formulário. Corrija e salve de novo." };
   render();
-  window.scrollTo(0, 0);
+  scrollToForm();
 }
 
 export function editMatch(id) {
@@ -772,7 +780,11 @@ export function refreshAdd() {
   // não redesenha se um seletor de lenda estiver aberto
   if (!document.querySelector("#add .pl:not(.hide)")) render();
 }
-registerView("add", () => { if (SV && !(SV.id && Date.now() < SV.until)) SV = null; collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) { F.eventId = null; F.ctx = freeCtx(); F.kind = ""; } } render(); });
+registerView("add", () => { if (SV && !(SV.id && Date.now() < SV.until)) SV = null; collect(); if (pristine()) F = { ...blankForm(), details: F.details }; if (!F.editId) { const ev = S.openEvent(); if (ev && !F.eventId) { F.eventId = ev.id; F.ctx = ev.type; } if (F.eventId && !S.evt(F.eventId)?.status?.startsWith("open")) { F.eventId = null; F.ctx = freeCtx(); F.kind = ""; } } render();
+  // com evento aberto e o registro manual aberto, a tela já abre no formulário (o showView rola ao topo antes)
+  const lv = readLive();
+  if (!F.editId && F.manual && S.openEvent() && !(lv && lv.phase !== "setup")) requestAnimationFrame(() => { if (currentView() === "add" && !(SV && SV.id && !SV.form)) scrollToForm(); });
+});
 export function initRegister() { bind(); }
 // saiu da tela Registrar: a folha de battlefields não fica aberta por cima de outra tela
 export function leaveAdd() { closeBfSheet(false); }
