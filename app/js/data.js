@@ -57,6 +57,8 @@ export const LEGENDS = Object.fromEntries(
 );
 
 export const EVENT_TYPES = ["Casual", "Nexus Night", "Skirmish", "Showdown", "Riftatlas", "Regional (RQ)", "Outro"];
+// Tipos de evento competitivos, normalmente jogados em Bo3: a 1ª rodada já abre em Bo3 no registro manual.
+export const BO3_EVENT_TYPES = ["Skirmish", "Showdown", "Riftatlas", "Regional (RQ)"];
 
 // Battlefields por set (só os nomes, da galeria de cartas da Riot; lista de 1/11/2026).
 // Banidos no Constructed (lista de 18/09/2026) ficam marcados.

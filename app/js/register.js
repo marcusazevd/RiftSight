@@ -1,5 +1,5 @@
 // Tela "Registrar": resumo (recorde e últimas), atalho para o contador, evento e registro manual (recolhível).
-import { DOMAINS, LEGENDS, EVENT_TYPES } from "./data.js";
+import { DOMAINS, LEGENDS, EVENT_TYPES, BO3_EVENT_TYPES } from "./data.js";
 import * as S from "./store.js";
 import { esc, $, $$, avatar, domainPair, legendInfo, legendColors, dialog, confirmBox, promptBox, toast, RUNE } from "./ui.js";
 import { backupBanner, handleBackupBanner } from "./views.js";
@@ -16,12 +16,17 @@ export function blankForm() {
     editId: null, deckId: dk ? dk.id : null, versionId: dk ? lastVersionId(dk) : null,
     my: dk ? dk.legend : prefs.my || "", opp: "", ver: dk ? "" : prefs.ver || "",
     ctx: ev ? ev.type : freeCtx(), eventId: ev ? ev.id : null, round: null,
-    turn: "", note: "", fmt: prefs.fmt || "bo1", result: "", myBf: "", oppBf: "", kind: "",
+    turn: "", note: "", fmt: defaultFmt(ev), result: "", myBf: "", oppBf: "", kind: "",
     games: [g0(), g0(), g0()], timeDraw: false,
     date: toLocalInput(Date.now()), dateTouched: false, set: "", setTouched: false, details: false, manual: !!prefs.manual,
   };
 }
 const g0 = () => ({ first: "", result: "", myBf: "", oppBf: "" });
+// Formato inicial: a 1ª rodada (jogada) de um evento competitivo abre em Bo3 (U95-08); no resto, o último formato salvo.
+export function defaultFmt(ev) {
+  if (ev && BO3_EVENT_TYPES.includes(ev.type) && !S.getState().matches.some((m) => m.event && m.event.eventId === ev.id && !m.kind)) return "bo3";
+  return prefs.fmt || "bo1";
+}
 // Fora de evento o tipo padrão é "Casual" (ou o último que o jogador escolheu fora de evento):
 // o tipo do último evento não vaza para as partidas soltas.
 export function freeCtx() { return EVENT_TYPES.includes(prefs.ctxOut) ? prefs.ctxOut : "Casual"; }
@@ -530,7 +535,7 @@ function bind() {
     if (b.dataset.bk) { collect(); await handleBackupBanner(b); render(); return; }
     if (b.id === "go-live") return showView("live", { setup: true });
     if (b.id === "go-resume") return showView("live");
-    if (b.id === "ev-start") { const ev = await startEvent(); if (ev) { collect(); F.eventId = ev.id; F.ctx = ev.type; if (ev.deckId) { const d = S.deck(ev.deckId); F.deckId = d.id; F.my = d.legend; F.versionId = ev.versionId; } render(); } return; }
+    if (b.id === "ev-start") { const ev = await startEvent(); if (ev) { collect(); F.eventId = ev.id; F.ctx = ev.type; if (!F.result && !F.games.some((g) => g.result)) F.fmt = defaultFmt(ev); if (ev.deckId) { const d = S.deck(ev.deckId); F.deckId = d.id; F.my = d.legend; F.versionId = ev.versionId; } render(); } return; }
     if (b.id === "ev-close") { const ev = S.openEvent(); if (ev && (await closeEvent(ev))) { F.eventId = null; F.ctx = freeCtx(); F.kind = ""; render(); } return; }
     if (b.dataset.kind !== undefined) {
       collect();
