@@ -202,7 +202,8 @@ function bo3Games() {
   }
   return { used, hole };
 }
-const clearGame = (g) => { g.result = ""; g.first = ""; };
+// O game que deixa de existir perde tudo, inclusive os battlefields (senão eles continuariam "usados").
+const clearGame = (g) => { g.result = ""; g.first = ""; g.myBf = ""; g.oppBf = ""; };
 const pressed = (on) => `class="${on ? "on" : ""}" aria-pressed="${on ? "true" : "false"}"`;
 
 // ---------- battlefields do game (0.9.5: um botão por game, que abre a folha) ----------
@@ -216,13 +217,16 @@ function bfBtn(i) {
     <span class="bm">${esc(mine || "—")}</span><span class="bx" aria-hidden="true">×</span><span class="bt">${esc(theirs || "—")}</span><i aria-hidden="true">▾</i></button>`;
 }
 
+// Quantos games aparecem: o game 3 só existe com 1–1; continua à vista enquanto guardar um resultado (ex.: G1 desmarcado por engano)
+function shownGames() {
+  const g = F.games, split = !!(g[0].result && g[1].result && g[0].result !== g[1].result);
+  return !F.timeDraw && (split || !!g[2].result) ? 3 : 2;
+}
 function gamesHTML() {
   const rows = [];
   const g = F.games;
   const split = !!(g[0].result && g[1].result && g[0].result !== g[1].result);
-  // game 3 só existe com 1–1; continua à vista enquanto guardar um resultado (ex.: G1 desmarcado por engano)
-  const showG3 = !F.timeDraw && (split || !!g[2].result);
-  const n = showG3 ? 3 : 2;
+  const n = shownGames();
   for (let i = 0; i < n; i++) {
     const x = g[i];
     rows.push(`<div class="gm" data-g="${i}"><div class="gline"><span class="gn" aria-hidden="true">G${i + 1}</span>
@@ -362,9 +366,11 @@ function collect() {
 // ---------- folha de battlefields de um game ----------
 // Escolher aplica na hora (o botão do game já mostra); ✕, PRONTO, voltar do Android e toque fora só fecham.
 let SH = null; // { i }
+// Só contam os games que existem na tela: um G3 escondido (placar 2–0, empate por tempo) não bloqueia o G1/G2 (Q95-02).
 function usedIn(i, key) {
   if (i === "b1") return [];
-  return F.games.map((g, k) => ({ name: canonBf(g[key]), g: k + 1 })).filter((x, k) => k !== +i && x.name);
+  const n = shownGames();
+  return F.games.map((g, k) => ({ name: canonBf(g[key]), g: k + 1 })).filter((x, k) => k < n && k !== +i && x.name);
 }
 // Sugestões do oponente: só battlefields que oponentes já usaram; primeiro os da mesma lenda.
 function oppSuggest(opp) {
@@ -424,7 +430,10 @@ function searchResults(box, side) {
   const g = bfOf(SH.i), cur = canonBf(side === "my" ? g.myBf : g.oppBf), used = usedIn(SH.i, side === "my" ? "myBf" : "oppBf");
   const hits = allBattlefields().filter((b) => bfKey(b.name).includes(k)).slice(0, 8);
   const exact = hits.some((b) => bfKey(b.name) === k);
-  res.innerHTML = hits.map((b) => bfOpt(side, b.name, cur, used)).join("") + (exact ? "" : `<button type="button" class="bo add" data-side="${side}" data-bf="${esc(typed)}">＋ Usar "${esc(typed)}"</button>`);
+  // nome fora do catálogo: se já foi usado em outro game (sem acento/caixa), aparece riscado em vez de "＋ Usar" (Q95-07)
+  const u = exact ? null : used.find((x) => bfKey(x.name) === k);
+  const extra = exact ? "" : u ? bfOpt(side, u.name, cur, used) : cur && bfKey(cur) === k ? bfOpt(side, cur, cur, used) : `<button type="button" class="bo add" data-side="${side}" data-bf="${esc(typed)}">＋ Usar "${esc(typed)}"</button>`;
+  res.innerHTML = hits.map((b) => bfOpt(side, b.name, cur, used)).join("") + extra;
 }
 function paintGame(i) {
   if (i === "b1") { const b = document.querySelector('#add [data-bfg="b1"]'); if (b) b.outerHTML = bfBtn("b1"); }
@@ -559,7 +568,7 @@ function bind() {
   });
   el.addEventListener("change", async (e) => {
     if (e.target.id === "f-ver" && e.target.value === "__new") { collect(); const id = await newVersion(F.deckId); if (id) F.versionId = id; render(); return; }
-    if (e.target.id === "f-tdraw") { F.timeDraw = e.target.checked; collect(); if (F.timeDraw) F.games[2] = { ...F.games[2], result: "", first: "" }; $("#f-games").innerHTML = gamesHTML(); paintBar(); return; }
+    if (e.target.id === "f-tdraw") { F.timeDraw = e.target.checked; collect(); if (F.timeDraw) clearGame(F.games[2]); $("#f-games").innerHTML = gamesHTML(); paintBar(); return; }
     if (e.target.id === "f-date") { collect(); if (!F.setTouched) render(); }
     if (e.target.id === "f-set") { F.set = e.target.value; F.setTouched = true; }
   });
