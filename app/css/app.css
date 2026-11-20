@@ -984,8 +984,13 @@ body:not(.home-on) .savebar{display:none}
 /* folha de battlefields */
 #bfsheet{position:fixed;inset:0;z-index:95}
 .bs-scrim{position:absolute;inset:0;background:rgba(7,5,15,.62)}
-.bs{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:14px;
-  padding:16px 14px calc(18px + env(safe-area-inset-bottom,0px));background:var(--sf);border-top:3px solid var(--gold)}
+/* 2.1: cabeçalho e ações fixos; só o meio (.bs-b) rola, então o PRONTO fica sempre à vista (U95-04) */
+.bs{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;max-height:92%;overflow:hidden;display:flex;flex-direction:column;gap:12px;
+  padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px));background:var(--sf);border-top:3px solid var(--gold)}
+.bs-h,.bs-a{flex:none}
+.bs-b{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:14px;margin:0 -4px;padding:0 4px 2px}
+.bs.done{border-top-color:var(--win)}
+.bs.done .bs-ok{background:var(--win);color:var(--win-ink);box-shadow:none}
 #bfsheet.anim .bs{animation:bsup .16s ease-out}
 @keyframes bsup{from{transform:translateY(24px);opacity:.4}}
 .bs-h{display:flex;align-items:center;justify-content:space-between;gap:8px}

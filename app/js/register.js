@@ -363,36 +363,47 @@ function oppSuggest(opp) {
   return [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR")).map((x) => x[0]);
 }
 function bfOpt(side, name, cur, used, big) {
-  const u = used.find((x) => x.name === name), on = name === cur;
+  const k = bfKey(name), u = used.find((x) => bfKey(x.name) === k), on = !!cur && k === bfKey(cur);
   if (u && !on) return `<button type="button" class="bo used${big ? " tall" : ""}" disabled aria-label="${esc(name)}, já usado no game ${u.g}"><s>${esc(name)}</s><small>usado no G${u.g}</small></button>`;
   return `<button type="button" class="bo${big ? " tall" : ""}${on ? " on" : ""}" data-side="${side}" data-bf="${esc(name)}" aria-pressed="${on}">${esc(name)}</button>`;
 }
 function bfSearchHTML(side, label) {
   return `<label class="bs-s"><span aria-hidden="true">⌕</span><input type="search" class="bs-q" data-side="${side}" placeholder="Buscar outro battlefield" aria-label="${label}" autocomplete="off" autocapitalize="off" spellcheck="false"></label><div class="bs-res" data-side="${side}" role="group" aria-label="Resultados da busca"></div>`;
 }
-function sheetHTML(i) {
+// A ordem dos chips é fixada ao abrir a folha (SH.order) e não muda enquanto ela está aberta: o escolhido só
+// ganha destaque no lugar onde está, para um 2º toque rápido não cair no vizinho (U95-01).
+function sheetOrder(i) {
   const g = bfOf(i), dk = F.deckId ? S.deck(F.deckId) : null;
   const own = dk ? [...new Set((dk.battlefields || []).filter(Boolean).map(canonBf))] : [];
   const mine = canonBf(g.myBf), theirs = canonBf(g.oppBf), uMy = usedIn(i, "myBf"), uOp = usedIn(i, "oppBf");
+  const my = own.length ? [...own, ...(mine && !own.includes(mine) ? [mine] : [])]
+    : [...new Set([mine, ...uMy.map((x) => x.name), ...knownMyBattlefields()].filter(Boolean))].slice(0, 6 + uMy.length);
+  const opp = [...new Set([...uOp.map((x) => x.name), theirs, ...oppSuggest(F.opp)].filter(Boolean))].slice(0, 6 + uOp.length);
+  return { own: own.length > 0, my, opp };
+}
+function sheetHTML(i) {
+  const g = bfOf(i), dk = F.deckId ? S.deck(F.deckId) : null;
+  const mine = canonBf(g.myBf), theirs = canonBf(g.oppBf), uMy = usedIn(i, "myBf"), uOp = usedIn(i, "oppBf");
+  const o = (SH && SH.order) || sheetOrder(i);
   let my;
-  if (own.length) my = `<div class="bs-l">Seu battlefield <span>· ${own.length === 1 ? "o do deck" : `os ${own.length} do deck`} ${esc(dk.name)}</span></div>
-      <div class="bs-grid">${own.map((n) => bfOpt("my", n, mine, uMy, true)).join("")}${mine && !own.includes(mine) ? bfOpt("my", mine, mine, uMy, true) : ""}</div>`;
+  if (o.own) my = `<div class="bs-l" id="bs-lm">Seu battlefield <span>· ${o.my.length === 1 ? "o do deck" : `os ${o.my.length} do deck`} ${esc(dk ? dk.name : "")}</span></div>
+      <div class="bs-grid">${o.my.map((n) => bfOpt("my", n, mine, uMy, true)).join("")}</div>`;
   else {
     // deck sem battlefields cadastrados (ou só a lenda): os que você já usou + busca
-    const sug = [...new Set([mine, ...uMy.map((x) => x.name), ...knownMyBattlefields()].filter(Boolean))].slice(0, 6 + uMy.length);
-    my = `<div class="bs-l">Seu battlefield <span>· ${dk ? "o deck não tem battlefields cadastrados" : "busque ou escolha"}</span></div>
-      ${sug.length ? `<div class="bs-chips">${sug.map((n) => bfOpt("my", n, mine, uMy)).join("")}</div>` : ""}${bfSearchHTML("my", "Buscar o seu battlefield")}`;
+    my = `<div class="bs-l" id="bs-lm">Seu battlefield <span>· ${dk ? "o deck não tem battlefields cadastrados" : "busque ou escolha"}</span></div>
+      ${o.my.length ? `<div class="bs-chips">${o.my.map((n) => bfOpt("my", n, mine, uMy)).join("")}</div>` : ""}${bfSearchHTML("my", "Buscar o seu battlefield")}`;
   }
-  const sugOp = [...new Set([...uOp.map((x) => x.name), theirs, ...oppSuggest(F.opp)].filter(Boolean))].slice(0, 6 + uOp.length);
   const title = i === "b1" ? "BATTLEFIELDS" : `GAME ${+i + 1} · BATTLEFIELDS`;
   return `<div class="bs-scrim" data-close="1"></div>
     <section class="bs" role="dialog" aria-modal="true" aria-labelledby="bs-t">
       <div class="bs-h"><span class="bs-t" id="bs-t">${title}</span><button type="button" class="bs-x" data-close="1" aria-label="Fechar">✕</button></div>
-      <div class="bs-p">${my}</div>
-      <div class="bs-p"><div class="bs-l">Do oponente${F.opp ? ` <span>· ${esc(F.opp)}</span>` : ""}</div>
-        ${sugOp.length ? `<div class="bs-chips">${sugOp.map((n) => bfOpt("opp", n, theirs, uOp)).join("")}</div>` : ""}
+      <div class="bs-b">
+      <div class="bs-p" role="group" aria-labelledby="bs-lm">${my}</div>
+      <div class="bs-p" role="group" aria-labelledby="bs-lo"><div class="bs-l" id="bs-lo">Do oponente${F.opp ? ` <span>· ${esc(F.opp)}</span>` : ""}</div>
+        ${o.opp.length ? `<div class="bs-chips">${o.opp.map((n) => bfOpt("opp", n, theirs, uOp)).join("")}</div>` : ""}
         ${bfSearchHTML("opp", "Buscar battlefield do oponente")}
-        <p class="bs-hint">${sugOp.length ? `Sugestões: os que oponentes já usaram contra você${F.opp ? ` (primeiro os de ${esc(F.opp)})` : ""}.` : "Ainda não há battlefields de oponentes registrados: use a busca."}</p></div>
+        <p class="bs-hint">${o.opp.length ? `Sugestões: os que oponentes já usaram contra você${F.opp ? ` (primeiro os de ${esc(F.opp)})` : ""}.` : "Ainda não há battlefields de oponentes registrados: use a busca."}</p></div>
+      </div>
       <div class="bs-a"><button type="button" class="btn bs-none" data-none="1">Sem battlefield</button><button type="button" class="go bs-ok" data-close="1">PRONTO</button></div>
     </section>`;
 }
@@ -421,29 +432,47 @@ function sheetKeys(e) {
   else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
   else if (!box.contains(document.activeElement)) { e.preventDefault(); a.focus(); }
 }
-function drawSheet(focusSel) {
+function drawSheet() {
   const box = document.getElementById("bfsheet"); if (!box || !SH) return;
   box.innerHTML = sheetHTML(SH.i);
-  const f = (focusSel && box.querySelector(focusSel)) || box.querySelector(".bo:not([disabled])") || box.querySelector(".bs-x");
+  const f = box.querySelector(".bo:not([disabled])") || box.querySelector(".bs-x");
   if (f) f.focus({ preventScroll: true });
 }
+// Marca o escolhido de um lado sem redesenhar a folha (nada muda de lugar sob o dedo).
+function markSide(box, side, cur) {
+  const k = bfKey(cur);
+  box.querySelectorAll(`.bo[data-side="${side}"][data-bf]`).forEach((x) => { const on = !!k && bfKey(x.dataset.bf) === k; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on); });
+}
+export const RETAP_MS = 350, AUTOCLOSE_MS = 250;
 function openBfSheet(i) {
   closeBfSheet(false);
   collect();
-  SH = { i };
+  SH = { i, tap: null, closing: 0 };
+  SH.order = sheetOrder(i);
   const box = document.createElement("div"); box.id = "bfsheet"; box.className = "anim"; document.body.appendChild(box);
-  setTimeout(() => box.classList.remove("anim"), 250); // só a abertura anima; redesenhar ao escolher não pisca
+  setTimeout(() => box.classList.remove("anim"), 250); // só a abertura anima
   document.body.classList.add("sheet-on");
   drawSheet();
   box.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-close], [data-none], [data-bf]"); if (!b || b.disabled) return;
+    const b = e.target.closest("[data-close], [data-none], [data-bf]"); if (!b || b.disabled || !SH) return;
     if (b.dataset.close) return closeBfSheet();
+    if (SH.closing) return; // já confirmando: a folha fecha em instantes
     const g = bfOf(SH.i);
     if (b.dataset.none) { g.myBf = ""; g.oppBf = ""; paintGame(SH.i); return closeBfSheet(); }
-    const key = b.dataset.side === "my" ? "myBf" : "oppBf", name = canonBf(b.dataset.bf);
-    g[key] = canonBf(g[key]) === name ? "" : name; // tocar no escolhido desmarca
+    const side = b.dataset.side, key = side === "my" ? "myBf" : "oppBf", name = canonBf(b.dataset.bf);
+    // toque duplo: o 2º toque no mesmo alvo em menos de RETAP_MS é ignorado (não desmarca)
+    const tk = side + "|" + bfKey(name), now = Date.now();
+    if (SH.tap && SH.tap.k === tk && now - SH.tap.t < RETAP_MS) return;
+    SH.tap = { k: tk, t: now };
+    g[key] = canonBf(g[key]) && bfKey(g[key]) === bfKey(name) ? "" : name; // tocar de novo (depois) no escolhido desmarca
+    markSide(box, side, g[key]);
     paintGame(SH.i);
-    drawSheet(`[data-side="${b.dataset.side}"][data-bf="${CSS.escape(name)}"]`);
+    // os dois lados escolhidos: destaque rápido e a folha fecha sozinha
+    if (g[key] && g.myBf && g.oppBf) {
+      const sec = box.querySelector(".bs"); if (sec) sec.classList.add("done");
+      const ok = box.querySelector(".bs-ok"); if (ok) ok.textContent = "✓ PRONTO";
+      const me = SH; me.closing = setTimeout(() => { if (SH === me) closeBfSheet(); }, AUTOCLOSE_MS);
+    }
   });
   box.addEventListener("input", (e) => { if (e.target.classList.contains("bs-q")) searchResults(box, e.target.dataset.side); });
   box.addEventListener("keydown", (e) => {
@@ -456,6 +485,7 @@ export function closeBfSheet(refocus = true) {
   const box = document.getElementById("bfsheet");
   if (!box) { SH = null; return false; }
   const i = SH && SH.i;
+  if (SH && SH.closing) clearTimeout(SH.closing);
   box.remove(); SH = null;
   document.body.classList.remove("sheet-on");
   document.removeEventListener("keydown", sheetKeys, true);
