@@ -140,7 +140,7 @@ export function matrix(list) {
 // Taxa suavizada: puxa amostras pequenas na direção de uma taxa de referência.
 export const smooth = (w, n, prior, k = 3) => (w + k * prior) / (n + k);
 
-// Peso de cada matchup no teu resultado: frequência × taxa suavizada. É a mesma conta em todo lugar
+// Peso de cada matchup no seu resultado: frequência × taxa suavizada. É a mesma conta em todo lugar
 // (aba Matchups, destaques da aba Geral e card do deck), para as telas não se contradizerem.
 export const FEW_MU = 5;
 export function matchupWeights(list) {
@@ -164,7 +164,7 @@ export function bestMatchup(list) {
 }
 
 // Recomendação para o torneio: para cada versão, win rate esperado contra o "campo"
-// (lendas que tu mais enfrentou), usando taxa por matchup suavizada pela taxa geral da versão.
+// (lendas que você mais enfrentou), usando taxa por matchup suavizada pela taxa geral da versão.
 export function recommend(list, fieldList) {
   const field = new Map();
   fieldList.forEach((m) => field.set(m.opp, (field.get(m.opp) || 0) + 1));

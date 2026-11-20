@@ -341,7 +341,7 @@ async function save() {
   let games, result, score = "";
   {
     const miss = [];
-    if (!F.my) miss.push("teu deck ou tua lenda");
+    if (!F.my) miss.push("seu deck ou sua lenda");
     if (!F.opp) miss.push("a lenda do oponente");
     if (!bo3 && !F.result) miss.push("o resultado: vitória, derrota ou empate");
     if (bo3 && !F.timeResult) {

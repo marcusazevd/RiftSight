@@ -138,8 +138,8 @@ function panel(side) {
     + bt("m", -1, "", "−1", `Tirar um ponto de ${esc(name)}`);
   const clk = `<b id="clk-${side}">${fmtClock(liveTime(g, side))}</b>`, nm = esc(label).toUpperCase();
   const body = act
-    ? `<div class="pa-h">${avatar(name, 60)}<div class="pa-n"><span class="pa-t">${nm}</span><span class="pa-turn">▶ ${side === "me" ? "TEU TURNO" : "TURNO DELE"}</span></div>
-        <div class="pa-clk"><span class="clk on">${clk}</span><small>${side === "me" ? "teu relógio" : "relógio dele"}</small></div></div>
+    ? `<div class="pa-h">${avatar(name, 60)}<div class="pa-n"><span class="pa-t">${nm}</span><span class="pa-turn">▶ ${side === "me" ? "SEU TURNO" : "TURNO DELE"}</span></div>
+        <div class="pa-clk"><span class="clk on">${clk}</span><small>${side === "me" ? "seu relógio" : "relógio dele"}</small></div></div>
       <div class="pa-s"><output class="pts" aria-live="polite">${pts}</output><div class="pa-i"><span class="pa-de">DE ${WIN}</span><span class="srcs">Conquer ${s.conquer} · Hold ${s.hold}</span>${s.other ? `<span class="srcs">+${s.other} ${s.other === 1 ? "outro" : "outros"}</span>` : ""}${pts === WIN - 1 ? '<span class="almost">▲ FALTA 1 PONTO ▲</span>' : `<span class="left">faltam ${Math.max(0, WIN - pts)}</span>`}</div></div>
       ${segBar(g, side, name)}
       <div class="srcb big">${btns}</div>`
@@ -147,15 +147,15 @@ function panel(side) {
         <span class="srcs">Conquer ${s.conquer} · Hold ${s.hold}${s.other ? " · +" + s.other : ""}</span></div><output class="pts${pts === WIN - 1 ? " almost1" : ""}" aria-live="polite">${pts}</output></div>
       <div class="srcb row">${btns}</div>`;
   return { cls: `pn ${side} ${act ? "act" : "cmp"}`, style: `--a:${a};--b:${b};--ca:${ka.bg};--ia:${ka.ink};--cb:${kb.bg};--ib:${kb.ink}`,
-    aria: `${side === "me" ? "Tu" : "Oponente"}: ${name}, ${act ? "no turno" : "fora do turno"}`, body };
+    aria: `${side === "me" ? "Você" : "Oponente"}: ${name}, ${act ? "no turno" : "fora do turno"}`, body };
 }
 function midHTML() {
   const g = G(), ms = matchScore(), me = active(g) === "me";
-  const bf = g.myBf || g.oppBf ? `<div class="mid-bf">${g.myBf ? `<span>Teu bf: <b>${esc(g.myBf)}</b></span>` : ""}${g.oppBf ? `<span>Dele: <b>${esc(g.oppBf)}</b></span>` : ""}</div>` : "";
+  const bf = g.myBf || g.oppBf ? `<div class="mid-bf">${g.myBf ? `<span>Seu bf: <b>${esc(g.myBf)}</b></span>` : ""}${g.oppBf ? `<span>Dele: <b>${esc(g.oppBf)}</b></span>` : ""}</div>` : "";
   return `<div class="mid-r${bf ? " bf" : ""}"><div class="mid-l"><span class="mid-g">${L.fmt === "bo3" ? "GAME " + g.n + " · " + ms.w + "–" + ms.l : "PARTIDA BO1"}</span>
       <span class="mid-t">Turno ${turnNo(g)} · <b id="clk-total">${fmtClock(Date.now() - (L.startedAt || Date.now()))}</b><span class="dp"> de partida</span></span></div>${bf}</div>
     <div class="mid-b"><button type="button" class="mb" id="lv-undo" aria-label="Desfazer última ação" ${g.log.length ? "" : "disabled"}>↶</button>
-      <button type="button" class="mb pass" id="lv-pass" aria-label="Passar o turno ${me ? "para o oponente" : "para ti"}">${me ? "PASSAR TURNO ▲" : "▼ PASSAR TURNO"}</button>
+      <button type="button" class="mb pass" id="lv-pass" aria-label="Passar o turno ${me ? "para o oponente" : "para você"}">${me ? "PASSAR TURNO ▲" : "▼ PASSAR TURNO"}</button>
       <button type="button" class="mb" id="lv-menu" aria-label="Opções da partida">⋯</button></div>`;
 }
 // fresh: monta o placar do zero (sem animação). Senão atualiza os mesmos elementos, para que a
@@ -248,11 +248,11 @@ function renderGameOver() {
     <div class="go-k">${L.fmt === "bo3" ? "GAME " + g.n + " · " : ""}TURNO ${turnNo(g)}</div>
     <div class="go-t">${win ? "VITÓRIA!" : "DERROTA"}</div>
     <div class="go-s"><div class="${win ? "" : "dim"}">${avatar(L.my, 64)}<b>${g.points.me}</b></div><span>×</span><div class="${win ? "dim" : ""}">${avatar(L.opp, 64)}<b>${g.points.opp}</b></div></div>
-    ${g.time ? `<div class="card"><h2>Tempo</h2><div class="kpis"><div><b>${fmtClock(g.time.me)}</b><span>teu tempo</span></div><div><b>${fmtClock(g.time.opp)}</b><span>tempo dele</span></div><div><b>${fmtClock(g.time.me + g.time.opp)}</b><span>game</span></div></div></div>` : ""}
+    ${g.time ? `<div class="card"><h2>Tempo</h2><div class="kpis"><div><b>${fmtClock(g.time.me)}</b><span>seu tempo</span></div><div><b>${fmtClock(g.time.opp)}</b><span>tempo dele</span></div><div><b>${fmtClock(g.time.me + g.time.opp)}</b><span>game</span></div></div></div>` : ""}
     <div class="card"><h2>De onde vieram os pontos</h2>
-      <div class="obars"><span>Tu</span>${bar(a, ma, mb)}<span>${esc(L.opp)}</span>${bar(b, oa, ob)}</div>
-      <p class="m">Tu: ${a.conquer} conquer · ${a.hold} hold${a.other ? " · " + a.other + (a.other === 1 ? " outro" : " outros") : ""} — ${esc(L.opp)}: ${b.conquer} conquer · ${b.hold} hold${b.other ? " · " + b.other + (b.other === 1 ? " outro" : " outros") : ""}</p></div>
-    ${L.fmt === "bo3" ? `<div class="card gold"><h2>Placar do match · ${after.w} – ${after.l}</h2><p style="margin:0">${decided ? (after.w > after.l ? "Tu venceu o match!" : "O oponente venceu o match.") + " Continuar abre o resumo." : "Continuar prepara o game " + (g.n + 1) + "."}</p></div>` : ""}
+      <div class="obars"><span>Você</span>${bar(a, ma, mb)}<span>${esc(L.opp)}</span>${bar(b, oa, ob)}</div>
+      <p class="m">Você: ${a.conquer} conquer · ${a.hold} hold${a.other ? " · " + a.other + (a.other === 1 ? " outro" : " outros") : ""} — ${esc(L.opp)}: ${b.conquer} conquer · ${b.hold} hold${b.other ? " · " + b.other + (b.other === 1 ? " outro" : " outros") : ""}</p></div>
+    ${L.fmt === "bo3" ? `<div class="card gold"><h2>Placar do match · ${after.w} – ${after.l}</h2><p style="margin:0">${decided ? (after.w > after.l ? "Você venceu o match!" : "O oponente venceu o match.") + " Continuar abre o resumo." : "Continuar prepara o game " + (g.n + 1) + "."}</p></div>` : ""}
     <div class="go-a"><button type="button" class="btn" id="lv-go-undo">DESFAZER</button><button type="button" class="go" id="lv-go-ok">CONTINUAR ▶</button></div>
   </div>`;
 }
@@ -281,7 +281,7 @@ function renderSummary() {
     <div class="mu"><div class="pick">${avatar(L.my, 56)}<span class="pt">${esc(dk ? dk.name : L.my)}</span></div><div class="vs">VS</div><div class="pick">${avatar(L.opp, 56)}<span class="pt">${esc(L.opp)}</span></div></div>
     <div class="seg c3" id="lv-res" role="group" aria-label="Resultado">${["W", "L", "D"].map((k) => `<button type="button" class="${k} ${L.result === k ? "on" : ""}" data-r="${k}">${RES[k]}</button>`).join("")}</div>
     ${L.fmt === "bo3" ? `<p class="score">Placar: <b>${ms.w}–${ms.l}</b></p>` : ""}
-    <div class="gl">${L.games.map((g) => `<div class="gl-r"><b>${L.fmt === "bo3" ? "Game " + g.n : "Jogo"}</b><span class="${(g.result || "").toLowerCase()}">${g.unfinished && L.fmt === "bo3" ? "Interrompido (tempo)" : g.result ? RES[g.result] : "—"} ${g.points.me}–${g.points.opp}</span><span class="m">${g.first === "me" ? "comecei" : g.first === "opp" ? "oponente começou" : ""}${g.myBf ? " · " + esc(g.myBf) : ""}${g.oppBf ? " vs " + esc(g.oppBf) : ""}${mins(g) ? " · " + mins(g) : ""}</span>${g.time ? `<span class="m srcl">⏱ Tu ${fmtClock(g.time.me)} · Oponente ${fmtClock(g.time.opp)}</span>` : ""}${srcLine(g)}${spark(g)}</div>`).join("")}</div>
+    <div class="gl">${L.games.map((g) => `<div class="gl-r"><b>${L.fmt === "bo3" ? "Game " + g.n : "Jogo"}</b><span class="${(g.result || "").toLowerCase()}">${g.unfinished && L.fmt === "bo3" ? "Interrompido (tempo)" : g.result ? RES[g.result] : "—"} ${g.points.me}–${g.points.opp}</span><span class="m">${g.first === "me" ? "comecei" : g.first === "opp" ? "oponente começou" : ""}${g.myBf ? " · " + esc(g.myBf) : ""}${g.oppBf ? " vs " + esc(g.oppBf) : ""}${mins(g) ? " · " + mins(g) : ""}</span>${g.time ? `<span class="m srcl">⏱ Você ${fmtClock(g.time.me)} · Oponente ${fmtClock(g.time.opp)}</span>` : ""}${srcLine(g)}${spark(g)}</div>`).join("")}</div>
     <p class="m">${dk ? esc(dk.name) + " · " + esc(versionName(dk, L.versionId)) : esc(L.ver || "sem versão")} · ${ev ? esc(ev.name) + " · rodada " + nextRound(ev.id) : esc(L.ctx)}</p>
     <label for="lv-note">Notas</label><textarea id="lv-note" rows="2" placeholder="O que funcionou e o que deu errado">${esc(L.note || "")}</textarea>
     <button class="go" id="lv-save" type="button">SALVAR PARTIDA</button>
@@ -291,7 +291,7 @@ function srcLine(g) {
   const a = sourcesOf(g, "me"), b = sourcesOf(g, "opp");
   if (!(a.conquer + a.hold + a.other + b.conquer + b.hold + b.other)) return "";
   const t = (s) => `${s.conquer} conquer · ${s.hold} hold${s.other ? " · " + s.other + (s.other === 1 ? " outro" : " outros") : ""}`;
-  return `<span class="m srcl">Tu: ${t(a)}<br>Oponente: ${t(b)}</span>`;
+  return `<span class="m srcl">Você: ${t(a)}<br>Oponente: ${t(b)}</span>`;
 }
 // linha do tempo da pontuação (mini gráfico)
 function spark(g) {
@@ -354,7 +354,7 @@ export function liveBack() {
 }
 
 async function menu() {
-  const v = await dialog({ title: "Partida", body: "<p>O placar fica guardado se tu sair.</p>",
+  const v = await dialog({ title: "Partida", body: "<p>O placar fica guardado se você sair.</p>",
     actions: [{ label: "Encerrar por tempo", value: "time" }, { label: "Pausar e sair", value: "pause" }, { label: "Descartar", value: "discard", danger: true }, { label: "Voltar ao jogo", value: null, primary: true }] });
   if (v === "pause") { pauseClock(G()); persist(); wake(false); showView("add"); }
   if (v === "time") await byTime();
@@ -409,7 +409,7 @@ function bind() {
     if (b.dataset.first) {
       collectSetup();
       L.first = b.dataset.first === "coin" ? (Math.random() < 0.5 ? "me" : "opp") : b.dataset.first;
-      if (b.dataset.first === "coin") toast(L.first === "me" ? "Sorteio: tu começa" : "Sorteio: o oponente começa");
+      if (b.dataset.first === "coin") toast(L.first === "me" ? "Sorteio: você começa" : "Sorteio: o oponente começa");
       persist(); renderSetup(); return;
     }
     if (b.id === "lv-start") {

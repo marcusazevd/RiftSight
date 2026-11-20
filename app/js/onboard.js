@@ -13,12 +13,12 @@ const STEPS = [
     k: "BEM-VINDO",
     t: "Riftsight",
     art: `<div class="ob-rune">${RUNE}</div>`,
-    body: `<p class="ob-slogan">Conquer. Hold. Understand.</p><p>Teu companheiro de mesa para <b>Riftbound</b>. Ele marca os pontos durante a partida, guarda o teu histórico e mostra onde cada deck ganha e onde precisa melhorar.</p>
+    body: `<p class="ob-slogan">Conquer. Hold. Understand.</p><p>Seu companheiro de mesa para <b>Riftbound</b>. Ele marca os pontos durante a partida, guarda o seu histórico e mostra onde cada deck ganha e onde precisa melhorar.</p>
       <ul class="ob-feat"><li><b>Contador</b> que já vira registro</li><li><b>Decks com versões</b> para comparar mudanças</li><li><b>Estatísticas</b> por matchup, turno, battlefield e set</li><li><b>Eventos</b> rodada a rodada</li></ul>`,
   },
   {
     k: "PASSO 1",
-    t: "Monte teu deck",
+    t: "Monte seu deck",
     art: `<div class="ob-deck">${av("#e2483d", "#9b59d6", "JI")}<div><b>Jinx Aggro</b><small>v1 → v2</small><div class="ob-chips"><span>Void Gate</span><span>Grove</span><span>Sunken Temple</span></div></div></div>`,
     body: `<p>Em <b>Mais › Meus decks</b>, escolha a lenda, os <b>3 battlefields</b> e dê um nome à versão (v1).</p>
       <p>Mudou cartas? Crie a <b>v2</b> no mesmo deck. O app separa os resultados de cada versão e mostra qual está rendendo mais.</p>`,
@@ -43,12 +43,12 @@ const STEPS = [
     t: "Veja como está indo",
     art: `<div class="ob-bars">${[["Riven", 0.6], ["Ekko", 0.53], ["Kai'Sa", 0.9], ["Viktor", 0.44]].map(([n, p]) => `<div class="ob-bar"><span>${n}</span><div><i class="${p >= 0.5 ? "w" : "l"}" style="left:${Math.min(p, 0.5) * 100}%;width:${Math.abs(p - 0.5) * 100}%"></i><b></b></div><em class="${p >= 0.5 ? "w" : "l"}">${Math.round(p * 100)}%</em></div>`).join("")}</div>`,
     body: `<p>Na aba <b>Estatísticas</b>:</p>
-      <ul class="ob-feat"><li><b>Geral:</b> win rate, tendência e destaques</li><li><b>Matchups:</b> contra quem tu ganha e perde</li><li><b>Versões:</b> qual versão do deck rende mais</li><li><b>Torneio:</b> qual versão levar e o que treinar</li></ul>
-      <p class="m">A faixa clara nas barras mostra o quanto o número é confiável: com poucas partidas ela é larga, e vai estreitando conforme tu joga.</p>`,
+      <ul class="ob-feat"><li><b>Geral:</b> win rate, tendência e destaques</li><li><b>Matchups:</b> contra quem você ganha e perde</li><li><b>Versões:</b> qual versão do deck rende mais</li><li><b>Torneio:</b> qual versão levar e o que treinar</li></ul>
+      <p class="m">A faixa clara nas barras mostra o quanto o número é confiável: com poucas partidas ela é larga, e vai estreitando conforme você joga.</p>`,
   },
   {
     k: "PASSO 5",
-    t: "Teus dados são teus",
+    t: "Seus dados são seus",
     art: `<div class="ob-save"><svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.6" shape-rendering="crispEdges"><path d="M4 3h13l3 3v15H4z"/><path d="M7 3v6h9V3M7 21v-7h10v7"/></svg></div>`,
     body: `<p>Tudo fica <b>só neste aparelho</b>, sem conta e sem login.</p>
       <ul class="ob-feat"><li>Faça backup em <b>Mais › Backup</b> de vez em quando</li>${window.RBTAndroid ? "<li>O app também guarda um <b>backup automático</b> em Downloads/Riftsight</li>" : ""}<li>Trocou de celular? Importe o backup no novo</li></ul>

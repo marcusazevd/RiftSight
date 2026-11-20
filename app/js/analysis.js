@@ -63,9 +63,9 @@ function paceCard(list, title = "Ritmo de jogo") {
         <div class="sbar"><i class="c" style="width:${w("conquer")}%"></i><i class="h" style="width:${w("hold")}%"></i><i class="o" style="width:${w("other")}%"></i></div>
         <div class="m"><b class="c">■</b> Conquer ${Math.round(w("conquer"))}% · <b class="h">■</b> Hold ${Math.round(w("hold"))}%${s.other ? " · outros " + Math.round(w("other")) + "%" : ""}</div></div>`;
     };
-    h += row("Tu", t.me) + row("Oponentes", t.opp);
+    h += row("Você", t.me) + row("Oponentes", t.opp);
   }
-  if (ts) h += `<div class="kpis"><div><b>${fmtClock(ts.total)}</b><span>por game</span></div><div><b>${fmtClock(ts.me)}</b><span>teu tempo</span></div><div><b>${fmtClock(ts.opp)}</b><span>do oponente</span></div></div>`;
+  if (ts) h += `<div class="kpis"><div><b>${fmtClock(ts.total)}</b><span>por game</span></div><div><b>${fmtClock(ts.me)}</b><span>seu tempo</span></div><div><b>${fmtClock(ts.opp)}</b><span>do oponente</span></div></div>`;
   return h + `<p class="m" style="margin:10px 0 0">Só games jogados com o contador (${Math.max(t.games, ts ? ts.games : 0)}).</p></div>`;
 }
 
@@ -95,7 +95,7 @@ function heroCard(d) {
   const sw = st && { W: ["vitória", "vitórias"], L: ["derrota", "derrotas"], D: ["empate", "empates"] }[st.result];
   return `<div class="card gold hero"><div class="hero-top"><div class="hero-p ${tone(r.p)}">${pct(r.p)}</div>
       <div><div class="hero-r">${rec(r)}</div><div class="m">${r.n} partida${r.n !== 1 ? "s" : ""}${g.w + g.l ? ` · games ${g.w}–${g.l}` : ""}</div></div></div>
-    ${r.n >= 3 ? `<div class="m hero-ci"><span>Win rate real provável</span><b>${Math.round(lo * 100)}–${Math.round(hi * 100)}%</b></div>${wr(r, "big")}` : `<p class="m">Com 3 partidas ou mais aparece a faixa provável do teu win rate.</p>`}
+    ${r.n >= 3 ? `<div class="m hero-ci"><span>Win rate real provável</span><b>${Math.round(lo * 100)}–${Math.round(hi * 100)}%</b></div>${wr(r, "big")}` : `<p class="m">Com 3 partidas ou mais aparece a faixa provável do seu win rate.</p>`}
     <div class="chips">${last.map((m) => `<span class="chip ${m.result}" title="${RES[m.result]} contra ${esc(m.opp)}">${RES_SHORT[m.result]}</span>`).join("")}</div>
     <div class="m">Últimas ${last.length}${st ? ` · sequência atual: <b class="${st.result === "W" ? "w" : st.result === "L" ? "l" : ""}">${st.n} ${st.n > 1 ? sw[1] : sw[0]}</b>` : ""}</div></div>`;
 }
@@ -168,11 +168,11 @@ function matchups(d) {
     <div class="scale m">0%<span>${scale}</span>100%</div>
     ${mx.colKeys.length > 6 ? `<p class="m">Mostrando os 6 decks mais jogados.</p>` : ""}</div>${hardest(d)}`;
 }
-// Matchup que mais pesa contra ti: frequente e com win rate baixo (suavizado).
+// Matchup que mais pesa contra você: frequente e com win rate baixo (suavizado).
 function hardest(d) {
   const best = hardestMatchup(d);
   if (!best) return "";
-  return `<div class="card boss"><h2>Matchup mais difícil</h2><div class="muh" style="margin:0">${avatar(best.opp, 44)}<div style="flex:1"><b>${esc(best.opp)} · <span class="l">${pct(best.p)}</span></b><div class="m">${rec(best)} · aparece em ${pct(best.share)} das tuas partidas</div>${wr(best)}</div></div><p class="m" style="margin:8px 0 0">Treinar este matchup é o que mais sobe teu win rate.</p></div>`;
+  return `<div class="card boss"><h2>Matchup mais difícil</h2><div class="muh" style="margin:0">${avatar(best.opp, 44)}<div style="flex:1"><b>${esc(best.opp)} · <span class="l">${pct(best.p)}</span></b><div class="m">${rec(best)} · aparece em ${pct(best.share)} das suas partidas</div>${wr(best)}</div></div><p class="m" style="margin:8px 0 0">Treinar este matchup é o que mais sobe seu win rate.</p></div>`;
 }
 function matchupPage(d, opp) {
   const ms = d.filter((m) => m.opp === opp), r = record(ms), gr = gameRows(ms), cf = confidence(r.n, r.w);
@@ -235,7 +235,7 @@ function torneio(all) {
   const fieldList = TR.field === "set" ? all.filter((m) => m.set === curSet) : TR.field === "30" ? all.filter((m) => m.playedAt >= Date.now() - 30 * 864e5) : all;
   // todas as versões do deck entram na conta, mesmo as jogadas em outro set (a origem dos dados vai indicada)
   const mine = sideMatches(all, TR.side);
-  let h = `<div class="card gold"><h2>Preparação para o torneio</h2><p class="m" style="margin-top:0">Estima o desempenho de cada versão contra as lendas que tu mais enfrenta, pesando cada matchup pela frequência. Matchups com poucas partidas puxam para a média da versão.</p>
+  let h = `<div class="card gold"><h2>Preparação para o torneio</h2><p class="m" style="margin-top:0">Estima o desempenho de cada versão contra as lendas que você mais enfrenta, pesando cada matchup pela frequência. Matchups com poucas partidas puxam para a média da versão.</p>
     <div class="fl">${sel("tr_side", "", sd, TR.side, sideLabel)}${sel("tr_field", "", ["set", "30", "all"], TR.field, (v) => ({ set: "Campo: " + setName(curSet), "30": "Campo: 30 dias", all: "Campo: tudo" })[v])}</div>`;
   if (!mine.length || !fieldList.length) return h + '<p class="m">Sem partidas suficientes nesse recorte.</p></div>';
   const R = recommend(mine, fieldList);
@@ -251,7 +251,7 @@ function torneio(all) {
     <p class="m">"Cobre": parte do campo contra a qual essa versão já jogou.</p></div>`;
   const field = R.practice.slice().sort((a, b) => b.share - a.share);
   const fieldNote = R.fieldSize < FEW_FIELD ? ` <b class="l">Campo pequeno:</b> com menos de ${FEW_FIELD} partidas, as porcentagens mudam muito a cada jogo.` : "";
-  h += `<div class="card"><h2>O campo · ${R.fieldSize} partida${R.fieldSize !== 1 ? "s" : ""}</h2><p class="m" style="margin-top:0">Quem tu mais enfrenta neste recorte.${fieldNote}</p>${field.slice(0, 8).map((x) => `<div class="fr">${avatar(x.opp, 24)}<div class="nm">${esc(x.opp)}</div><div class="fbar"><i style="width:${x.share * 100}%"></i></div><div class="m">${pct(x.share)}</div></div>`).join("")}</div>`;
+  h += `<div class="card"><h2>O campo · ${R.fieldSize} partida${R.fieldSize !== 1 ? "s" : ""}</h2><p class="m" style="margin-top:0">Quem você mais enfrenta neste recorte.${fieldNote}</p>${field.slice(0, 8).map((x) => `<div class="fr">${avatar(x.opp, 24)}<div class="nm">${esc(x.opp)}</div><div class="fbar"><i style="width:${x.share * 100}%"></i></div><div class="m">${pct(x.share)}</div></div>`).join("")}</div>`;
   // só entra o que está abaixo de 50% (taxa suavizada) ou que este deck ainda não enfrentou
   const train = R.practice.filter((x) => !x.n || x.sm < 0.5).slice(0, 6);
   h += `<div class="card"><h2>Matchups para treinar</h2><p class="m" style="margin-top:0">Os que mais pesam: frequentes no campo e com win rate abaixo de 50%, ou que este deck ainda não enfrentou.</p>${!train.length ? '<p class="m">Nenhum matchup do campo está abaixo de 50% com este deck.</p>' : train.map((x) => x.n ? `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>${rec(x)}${x.n < 3 ? " (poucos dados)" : ""} · ${pct(x.share)} do campo</small></div>${wr(x)}<div class="pc ${tone(x.p)}">${pct(x.p)}</div></div>` : `<div class="br">${avatar(x.opp, 30)}<div class="nm">${esc(x.opp)}<small>nunca jogou com este deck · ${pct(x.share)} do campo</small></div><div></div><div class="pc">—</div></div>`).join("") + AXIS}</div>`;

@@ -79,7 +79,7 @@ function boot() {
   const live = readLive();
   showView(live && live.phase === "play" ? "live" : "add");
   S.init();
-  if (S.getState().corruptAt) setTimeout(() => dialog({ title: "Cópia local danificada", body: "<p>Os dados salvos neste aparelho estavam danificados e não puderam ser lidos. O conteúdo foi guardado à parte, sem ser apagado.</p><p class=\"m\">Importe teu último backup em Mais › Backup" + (window.RBTAndroid ? " (o app também guarda um backup automático em Downloads/Riftsight)" : "") + ".</p>" }), 600);
+  if (S.getState().corruptAt) setTimeout(() => dialog({ title: "Cópia local danificada", body: "<p>Os dados salvos neste aparelho estavam danificados e não puderam ser lidos. O conteúdo foi guardado à parte, sem ser apagado.</p><p class=\"m\">Importe seu último backup em Mais › Backup" + (window.RBTAndroid ? " (o app também guarda um backup automático em Downloads/Riftsight)" : "") + ".</p>" }), 600);
   else { const msg = repairNote(); if (msg) setTimeout(() => toast(msg, null, 10000), 600); }
   // Modo offline/instalável: só funciona fora do claude.ai (página própria ou APK).
   if (window.RBTAndroid) androidBridge();
@@ -100,14 +100,14 @@ function repairNote() {
   if (st.imagesDropped) parts.push(st.imagesDropped > 0 ? `${pl(st.imagesDropped, "imagem de lenda inválida foi ignorada", "imagens de lenda inválidas foram ignoradas")}.` : "As imagens das lendas estavam danificadas e foram ignoradas.");
   if (liveLost()) parts.push("A partida em andamento no contador estava danificada e não pôde ser recuperada.");
   if (!parts.length) return "";
-  return parts.join(" ") + " Uma cópia do original ficou guardada neste aparelho; confira teu último backup em Mais › Backup.";
+  return parts.join(" ") + " Uma cópia do original ficou guardada neste aparelho; confira seu último backup em Mais › Backup.";
 }
 // Busca de battlefield: lista todos (catálogo + digitados), filtra ao digitar, permite nome novo.
 async function bfSearch(current, used) {
   const all = allBattlefields(), recent = knownBattlefields().slice(0, 6);
   let pick = null;
   const row = (b) => `<button type="button" class="bfr${b.name === current ? " on" : ""}" data-n="${esc(b.name)}" data-k="${esc(bfKey(b.name))}"${used.includes(b.name) && b.name !== current ? " disabled" : ""}>
-    <span>${esc(b.name)}</span>${b.banned ? '<span class="bfban">banido</span>' : ""}${b.set ? setBadge(b.set) : '<span class="m">teu</span>'}</button>`;
+    <span>${esc(b.name)}</span>${b.banned ? '<span class="bfban">banido</span>' : ""}${b.set ? setBadge(b.set) : '<span class="m">seu</span>'}</button>`;
   const recentRows = recent.map((n) => all.find((b) => b.name === n)).filter(Boolean);
   await dialog({
     title: "Escolher battlefield",

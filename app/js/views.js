@@ -166,7 +166,7 @@ function collectDeck() {
 
 function renderMore() {
   const el = $("#more"), st = S.getState();
-  const status = window.RBTAndroid && st.backend !== "conta" ? '<span class="status"><i></i>Salvo neste celular (app). Faça backup de vez em quando.</span>' : st.backend === "conta" ? '<span class="status ok"><i></i>Salvo na tua conta Claude e neste aparelho</span>' : '<span class="status"><i></i>Salvo só neste aparelho</span>';
+  const status = window.RBTAndroid && st.backend !== "conta" ? '<span class="status"><i></i>Salvo neste celular (app). Faça backup de vez em quando.</span>' : st.backend === "conta" ? '<span class="status ok"><i></i>Salvo na sua conta Claude e neste aparelho</span>' : '<span class="status"><i></i>Salvo só neste aparelho</span>';
   const back = `<button class="btn" data-go="menu" type="button" style="margin-bottom:12px">‹ Voltar</button>`;
   if (moreView === "menu") {
     const legacy = S.legacyMatches();
@@ -179,7 +179,7 @@ function renderMore() {
         <button class="li" id="go-journey">${IC.about}<span>Como usar o app</span>›</button>
         <button class="li" data-go="about">${IC.about}<span>Sobre</span>›</button>
       </div></div>
-      ${legacy.length ? `<div class="card"><h2>App anterior</h2><p class="m" style="margin-top:0">Encontrei ${legacy.length} partida${legacy.length > 1 ? "s" : ""} do app anterior. Elas não entram no histórico novo, mas tu pode guardar um backup.</p><div class="btns"><button class="btn" id="lg-dl" type="button">Baixar backup antigo</button><button class="btn" id="lg-cp" type="button">Copiar</button></div></div>` : ""}`;
+      ${legacy.length ? `<div class="card"><h2>App anterior</h2><p class="m" style="margin-top:0">Encontrei ${legacy.length} partida${legacy.length > 1 ? "s" : ""} do app anterior. Elas não entram no histórico novo, mas você pode guardar um backup.</p><div class="btns"><button class="btn" id="lg-dl" type="button">Baixar backup antigo</button><button class="btn" id="lg-cp" type="button">Copiar</button></div></div>` : ""}`;
     return;
   }
   if (moreView === "decks") {
@@ -187,7 +187,7 @@ function renderMore() {
     el.innerHTML = back + `<div class="card"><h2>Meus decks</h2>${ds.length ? '<div class="list">' + ds.map((d) => {
       const ms = st.matches.filter((m) => m.deckId === d.id), r = record(ms), last = (d.versions || [])[d.versions.length - 1];
       return `<button class="li dkrow${d.archived ? " arch" : ""}" data-dk="${esc(d.id)}" type="button">${avatar(d.legend, 40)}<span class="dk-n"><b>${esc(d.name)}</b><span class="m">${esc(d.legend)} · ${last ? esc(last.name) : "sem versão"}${d.archived ? " · arquivado" : ""}</span></span><span class="m dk-r">${r.n ? r.w + "–" + r.l + (r.d ? "–" + r.d : "") : ""}</span><i aria-hidden="true">›</i></button>`;
-    }).join("") + "</div>" : '<p class="m">Cadastre teus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
+    }).join("") + "</div>" : '<p class="m">Cadastre seus decks para registrar versões e battlefields. Partidas sem deck continuam funcionando só com a lenda.</p>'}
     <button class="btn pri" id="dk-new" type="button" style="margin-top:12px">＋ Novo deck</button></div>`;
     return;
   }
@@ -196,7 +196,7 @@ function renderMore() {
     const names = new Set([...Object.keys(LEGENDS), ...Object.keys(st.settings.customLegends || {}), ...st.matches.flatMap((m) => [m.my, m.opp])]);
     const list = [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR"));
     const withImg = list.filter((n) => st.images[n]).length;
-    el.innerHTML = back + `<div class="card"><h2>Imagens das lendas</h2><p class="m" style="margin-top:0">Toque numa lenda para escolher uma imagem do teu aparelho. Ela aparece no confronto, no contador, no histórico e nas estatísticas. ${withImg} de ${list.length} com imagem.</p>
+    el.innerHTML = back + `<div class="card"><h2>Imagens das lendas</h2><p class="m" style="margin-top:0">Toque numa lenda para escolher uma imagem do seu aparelho. Ela aparece no confronto, no contador, no histórico e nas estatísticas. ${withImg} de ${list.length} com imagem.</p>
       <input id="lg-q" placeholder="Buscar lenda…" autocomplete="off" aria-label="Buscar lenda">
       <div class="lgrid">${list.map((n) => `<button type="button" class="lgi${st.images[n] ? " has" : ""}" data-limg="${esc(n)}">${avatar(n, 56)}<span>${esc(n)}</span></button>`).join("")}</div></div>`;
     return;
@@ -311,7 +311,7 @@ async function imageEditor(name) {
       <div id="ie-adj" class="hide"><label for="ie-z">Zoom</label><input id="ie-z" type="range" min="1" max="3" step="0.02" value="1">
       <label for="ie-x">Horizontal</label><input id="ie-x" type="range" min="-1" max="1" step="0.02" value="0">
       <label for="ie-y">Vertical</label><input id="ie-y" type="range" min="-1" max="1" step="0.02" value="0"></div>
-      <p class="m">A imagem fica salva só no teu app.</p>`,
+      <p class="m">A imagem fica salva só no seu app.</p>`,
     actions: [...(cur ? [{ label: "Remover", value: "remove", danger: true }] : []), { label: "Cancelar", value: null },
       { label: "Salvar", primary: true, value: () => { if (!img) return null; const out = document.createElement("canvas"); out.width = out.height = 160; draw(out, 160); return out.toDataURL("image/jpeg", 0.82); } }],
     onOpen: (r) => {
